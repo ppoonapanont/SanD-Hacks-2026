@@ -8,7 +8,7 @@ Our core differentiator is that users do not just listen to an AI-generated podc
 
 # Implementation Status
 
-Last updated: 2026-11-14
+Last updated: 2026-11-14 (News Engine complete — live SERP + Unlocker + Gemini verified)
 
 Status key: `COMPLETE` | `PARTIAL` | `STUB` | `NOT STARTED`
 
@@ -27,7 +27,7 @@ Status key: `COMPLETE` | `PARTIAL` | `STUB` | `NOT STARTED`
 | `.env.example` | COMPLETE | Gemini, Bright Data, ElevenLabs, Database |
 | Placeholder pages (home, configure, player, history) | COMPLETE | Structural only — Dev 2 owns final UI |
 | Dev 2 hooks scaffolds | COMPLETE | `usePodcastSession`, `useAudioQueue` |
-| Production build verified | PARTIAL | Build hit Cache Components/`params` Suspense issue; fix applied, re-verify pending |
+| Production build verified | COMPLETE | `npm run build` succeeds (Cache Components + Suspense on `/podcast/[id]`) |
 
 ## API routes
 
@@ -41,6 +41,7 @@ Status key: `COMPLETE` | `PARTIAL` | `STUB` | `NOT STARTED`
 | GET | `/api/podcast/:id` | COMPLETE | Shared (in-memory) |
 | POST | `/api/audio/generate` | STUB (501) | Dev 2 |
 | POST | `/api/audio/transcribe` | STUB (501) | Dev 2 |
+| POST | `/api/news/search` | COMPLETE | Dev 1 — Bright Data news test endpoint (mock fallback) |
 
 ## Developer 1 — AI and Backend
 
@@ -48,19 +49,19 @@ Status key: `COMPLETE` | `PARTIAL` | `STUB` | `NOT STARTED`
 
 | Item | Status | Location / notes |
 |------|--------|------------------|
-| Bright Data integration | STUB | `src/services/bright-data/` — config helpers only; no API calls |
-| News collection | STUB | `src/services/news/` returns mock sources |
-| Article analysis | NOT STARTED | |
-| Source management | PARTIAL | `NewsSource` type + mock data; no live pipeline |
-| Claim cross-referencing | NOT STARTED | |
+| Bright Data integration | COMPLETE | SERP news search + Unlocker article markdown scrape; response body unwrap |
+| News collection | COMPLETE | `fetchNewsForConfig` via Google News SERP (`tbm=nws`); mock fallback when unset/fails |
+| Article analysis | COMPLETE | Unlocker scrape + Gemini structured summary/claims (`src/services/news/enrich.ts`); heuristic fallback |
+| Source management | COMPLETE | Map → `NewsSource`, URL/title dedupe, scrapable-URL filter, `isMock` labeling |
+| Claim cross-referencing | COMPLETE | Related-story grouping + Gemini agreements/conflicts/uncertain (`crossReference.ts`) |
 
-**Next up for Dev 1:** implement live Bright Data retrieval and structured news output in `src/services/news/` + `src/services/bright-data/`.
+**News Engine complete.** Next up for Dev 1: Podcast Generator (`/api/podcast/generate`).
 
 ### Task 2: Podcast Generator
 
 | Item | Status | Location / notes |
 |------|--------|------------------|
-| Gemini integration | NOT STARTED | No SDK / client yet |
+| Gemini integration | PARTIAL | `@google/genai` client used for news analysis; podcast generation not wired |
 | Episode outlines | NOT STARTED | Types exist only |
 | Duration and depth control | PARTIAL | Validated on generate stub; not applied to generation |
 | Custom guest personalities | STUB | Mock guest catalog only |
@@ -129,14 +130,14 @@ Status key: `COMPLETE` | `PARTIAL` | `STUB` | `NOT STARTED`
 
 | Item | Status |
 |------|--------|
-| Working Bright Data news retrieval | NOT STARTED (mock fallback exists) |
+| Working Bright Data news retrieval | COMPLETE (live SERP + Unlocker + Gemini analysis) |
 | Podcast configuration UI | STUB |
 | Duration and depth controls | NOT STARTED (API validation only) |
 | Multiple customizable AI guests | STUB (mock catalog) |
 | Mastra podcast generation workflow | NOT STARTED |
 | Multi-speaker ElevenLabs audio | NOT STARTED |
 | Functional podcast player | STUB |
-| Basic source citations | NOT STARTED (types + mock sources only) |
+| Basic source citations | PARTIAL (News Engine returns citations; player UI not wired) |
 
 ### P1 — Core Differentiation
 
@@ -833,11 +834,11 @@ Primary paths: `src/services/bright-data/`, `src/services/news/`, `src/mastra/`,
 
 ### Task 1: News Engine
 
-- Bright Data integration. — STUB
-- News collection. — STUB (mock)
-- Article analysis. — NOT STARTED
-- Source management. — PARTIAL
-- Claim cross-referencing. — NOT STARTED
+- Bright Data integration. — COMPLETE
+- News collection. — COMPLETE (SERP + mock fallback)
+- Article analysis. — COMPLETE (Unlocker + Gemini)
+- Source management. — COMPLETE
+- Claim cross-referencing. — COMPLETE (Gemini + heuristic fallback)
 
 ### Task 2: Podcast Generator
 
