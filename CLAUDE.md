@@ -22,7 +22,7 @@ Status key: `COMPLETE` | `PARTIAL` | `STUB` | `NOT STARTED`
 | Shared API contracts (`src/types/api.ts`) | COMPLETE | Request/response types for podcast + audio routes |
 | Typed API client (`src/lib/api/client.ts`) | COMPLETE | For Dev 2 UI wiring |
 | Podcast config validation | COMPLETE | `src/lib/validation/podcast.ts` |
-| In-memory session store | COMPLETE | `src/lib/sessions.ts` (Neon not wired yet) |
+| In-memory session store | COMPLETE | `src/lib/sessions.ts` (no external database used) |
 | Mock news + starter guests | COMPLETE | `src/data/mock/` — mock news marked `isMock: true` |
 | `.env.example` | COMPLETE | Gemini, Bright Data, ElevenLabs, Database |
 | Placeholder pages (home, configure, player, history) | COMPLETE | Structural only — Dev 2 owns final UI |
@@ -76,7 +76,7 @@ Status key: `COMPLETE` | `PARTIAL` | `STUB` | `NOT STARTED`
 | Guest agent coordination | NOT STARTED | |
 | User question handling | STUB | `/api/podcast/interact` returns 501 |
 | Live research | NOT STARTED | |
-| Conversation memory | PARTIAL | In-memory sessions only; no Mastra memory / Neon |
+| Conversation memory | PARTIAL | In-memory sessions only; no Mastra memory |
 
 ## Developer 2 — Frontend and Audio
 
@@ -118,8 +118,7 @@ Status key: `COMPLETE` | `PARTIAL` | `STUB` | `NOT STARTED`
 | TypeScript interfaces | COMPLETE | `src/types/` |
 | API contracts | COMPLETE | Types + route stubs locked |
 | Frontend and backend integration | PARTIAL | Client + hooks ready; endpoints mostly unimplemented |
-| Neon database | NOT STARTED | `DATABASE_URL` reserved; using in-memory store |
-| Vultr deployment | NOT STARTED | |
+| Vercel deployment | PARTIAL | Build verified locally; not yet imported/deployed on Vercel |
 | Testing | NOT STARTED | |
 | Hackathon presentation | NOT STARTED | |
 | Sponsor track submissions | NOT STARTED | |
@@ -255,8 +254,8 @@ The experience should feel like joining a live panel discussion rather than inte
 - Web data collection: Bright Data
 - Voice generation: ElevenLabs
 - Speech recognition: ElevenLabs
-- Database: Neon PostgreSQL
-- Deployment: Vultr
+- Database: none — in-memory session store for the MVP
+- Deployment: Vercel
 
 Use existing libraries and sponsor APIs whenever appropriate.
 
@@ -459,7 +458,7 @@ Maintain:
 - Sources and citations
 - Current conversation position
 
-Use Neon for persistent storage.
+Currently held in the in-memory session store; no external database is wired up.
 
 ## Agent Reliability
 
@@ -752,9 +751,7 @@ The podcast should feel like a live conversation between people, not a sequence 
 
 # Database
 
-Use Neon PostgreSQL.
-
-Persist:
+Not currently used — the MVP runs on the in-memory session store (`src/lib/sessions.ts`). If persistence is needed later, design around these entities:
 
 - Users or anonymous user sessions.
 - User preferences.
@@ -891,8 +888,7 @@ Primary paths: `src/components/`, `src/app/` pages, `src/services/elevenlabs/`, 
 - TypeScript interfaces. — COMPLETE
 - API contracts. — COMPLETE (stubs locked)
 - Frontend and backend integration. — PARTIAL
-- Neon database. — NOT STARTED
-- Vultr deployment. — NOT STARTED
+- Vercel deployment. — PARTIAL (build verified locally)
 - Testing. — NOT STARTED
 - Hackathon presentation. — NOT STARTED
 - Sponsor track submissions. — NOT STARTED
@@ -1050,17 +1046,6 @@ Use ElevenLabs for:
 
 Voice interaction is central to the product, not an optional addition.
 
-## Neon
-
-Use Neon for:
-
-- Persistent podcast sessions.
-- Conversation history.
-- User preferences.
-- Guest configurations.
-- Agent memory.
-- Research and source relationships.
-
 ## Mastra
 
 Use Mastra for:
@@ -1088,10 +1073,6 @@ Use Gemini for:
 - Episode planning.
 - Guest reasoning.
 - Dynamic conversation generation.
-
-## Vultr
-
-Use Vultr for cloud deployment and hosting where practical.
 
 Sponsor technologies should provide meaningful functionality rather than superficial integrations.
 
