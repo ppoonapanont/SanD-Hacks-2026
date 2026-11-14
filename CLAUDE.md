@@ -64,7 +64,7 @@ Status key: `COMPLETE` | `PARTIAL` | `STUB` | `NOT STARTED`
 | Gemini integration | COMPLETE | `@google/genai` for news analysis + episode script (`src/services/podcast/generate.ts`) |
 | Episode outlines | COMPLETE | Chapters + timed H/A/B/C lines on 720s baseline; adapted for Experience |
 | Duration and depth control | COMPLETE | Passed into Gemini prompt; lines re-paced evenly after generation |
-| Custom guest personalities | PARTIAL | Experience guest map → config; mock catalog personas (not freeform create-guest yet) |
+| Custom guest personalities | COMPLETE | Experience guest map + freeform Create guest builder (name/expertise/personality/voice/avatar) → PodcastConfig |
 | Structured conversation generation | COMPLETE | `/generate` builds session; `/next` walks turns; Experience loads `liveScript` |
 
 **Podcast Generator MVP complete** (direct Gemini, not Mastra).
@@ -89,7 +89,7 @@ Status key: `COMPLETE` | `PARTIAL` | `STUB` | `NOT STARTED`
 | Home page | COMPLETE | Branded landing with CTA into Experience |
 | Topic selection | COMPLETE | Closed multi-select chips, not free text — NYTimes-style sections (World, U.S., Politics, Business, Technology, Science, Health, Climate, Sports, Arts) in `src/data/mock/experience-demo.ts` |
 | Duration and depth controls | COMPLETE | Experience setup → generate config |
-| Guest selection and customization | PARTIAL | Pick up to 3 demo guests; no freeform persona builder yet |
+| Guest selection and customization | COMPLETE | Pick up to 3 demo guests or create freeform panelists in Experience setup |
 
 ### Task 2: Audio Engine
 
@@ -109,8 +109,8 @@ Status key: `COMPLETE` | `PARTIAL` | `STUB` | `NOT STARTED`
 | Speaker visualization | COMPLETE | Active speaker / EQ treatment in Experience |
 | Live transcripts | COMPLETE | Timed transcript synced to TTS |
 | Microphone input | COMPLETE | Record → `/api/audio/transcribe` |
-| Interruption controls | COMPLETE | Research → live join lines from `/interact`; resume via `/resume` |
-| Guest addressing | PARTIAL | Panel highlights active speaker; `targetGuestId` on API, UI not wired yet |
+| Interruption controls | COMPLETE | Research → live join lines from `/interact` (incl. `targetGuestId`); resume via `/resume` |
+| Guest addressing | COMPLETE | Composer Address chip row shapes `targetGuestId` on `/interact` |
 | Conversation experience | COMPLETE | Listen + interrupt + resume loop live (demo fallback if no session) |
 
 ## Shared responsibilities
@@ -134,7 +134,7 @@ Status key: `COMPLETE` | `PARTIAL` | `STUB` | `NOT STARTED`
 | Working Bright Data news retrieval | COMPLETE (live SERP + Unlocker + Gemini analysis) |
 | Podcast configuration UI | COMPLETE (Experience setup) |
 | Duration and depth controls | COMPLETE |
-| Multiple customizable AI guests | PARTIAL (select demo guests; no freeform create yet) |
+| Multiple customizable AI guests | COMPLETE (demo presets + freeform Create guest builder) |
 | Mastra podcast generation workflow | PARTIAL (episode generate still direct Gemini; interrupt/resume registered as Mastra workflows) |
 | Multi-speaker ElevenLabs audio | COMPLETE (transcript-synced exclusive clips) |
 | Functional podcast player | COMPLETE (Experience) |
@@ -850,7 +850,7 @@ Primary paths: `src/services/bright-data/`, `src/services/news/`, `src/services/
 - Gemini integration. — COMPLETE (news + episode script)
 - Episode outlines. — COMPLETE
 - Duration and depth control. — COMPLETE
-- Custom guest personalities. — PARTIAL (mapped demo guests)
+- Custom guest personalities. — COMPLETE (mapped demo guests + freeform Create guest builder)
 - Structured conversation generation. — COMPLETE (`/generate` + `/next`; Experience `liveScript`)
 
 ### Task 3: Agent System
@@ -871,7 +871,7 @@ Primary paths: `src/components/`, `src/app/` pages, `src/services/elevenlabs/`, 
 - Home page. — COMPLETE
 - Topic selection. — COMPLETE (closed NYTimes-style section chips, not free text)
 - Duration and depth controls. — COMPLETE (Experience)
-- Guest selection and customization. — PARTIAL (select demo guests)
+- Guest selection and customization. — COMPLETE (demo presets + freeform Create guest builder)
 
 ### Task 2: Audio Engine
 
@@ -887,8 +887,8 @@ Primary paths: `src/components/`, `src/app/` pages, `src/services/elevenlabs/`, 
 - Speaker visualization. — COMPLETE
 - Live transcripts. — COMPLETE (TTS-synced)
 - Microphone input. — COMPLETE (STT)
-- Interruption controls. — COMPLETE
-- Guest addressing. — PARTIAL (`targetGuestId` API only)
+- Interruption controls. — COMPLETE (`/interact` + `/resume`, with `targetGuestId`)
+- Guest addressing. — COMPLETE (Address chips + targetGuestId)
 - Conversation experience. — COMPLETE (listen + interrupt + resume)
 
 ## Shared Responsibilities

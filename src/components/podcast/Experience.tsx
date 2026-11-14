@@ -5,14 +5,12 @@ import { useEffect, useRef, useState } from "react";
 
 import { EpisodeSetup } from "@/components/configuration/EpisodeSetup";
 import {
-  DEMO_GUESTS,
   DEMO_JOIN_LINES,
   DEMO_SCRIPT,
   DEMO_SOURCES,
   DEMO_VOICE_QUESTION,
   HOST_PROFILE,
   type DemoScriptLine,
-  type GuestKey,
   type SpeakerCode,
 } from "@/data/mock/experience-demo";
 import { useTurnAudio } from "@/hooks";
@@ -22,6 +20,12 @@ import {
   resumePodcast,
   transcribeAudio,
 } from "@/lib/api/client";
+import {
+  buildCustomGuestProfile,
+  resolvePanelProfile,
+  type CustomGuestInput,
+  type PanelGuestProfile,
+} from "@/lib/guests/panelProfiles";
 import {
   adaptInteractTurnsToJoinLines,
   adaptSessionToExperience,
@@ -46,8 +50,12 @@ const TICK_MS = 250;
 /** If TTS never returns / never ends, still move the transcript forward. */
 const LISTEN_STALL_MS = 18_000;
 
-function profileForGuestSlot(guests: GuestKey[], code: SpeakerCode) {
-  const active = guests.length ? guests : (["ada"] as GuestKey[]);
+function profileForGuestSlot(
+  guests: string[],
+  customGuests: Record<string, PanelGuestProfile>,
+  code: SpeakerCode,
+) {
+  const active = guests.length ? guests : ["economist"];
   const slot: Record<SpeakerCode, string> = {
     H: "host",
     A: active[0],
@@ -56,7 +64,7 @@ function profileForGuestSlot(guests: GuestKey[], code: SpeakerCode) {
   };
   const id = slot[code];
   if (id === "host") return HOST_PROFILE;
-  return DEMO_GUESTS[id as GuestKey] ?? HOST_PROFILE;
+  return resolvePanelProfile(id, customGuests);
 }
 
 function scaleT(lineT: number, durationMinutes: number) {
@@ -235,7 +243,7 @@ export function Experience() {
       for (const i of [idx + 1, idx + 2]) {
         const line = script[i];
         if (!line) continue;
-        const profile = profileForGuestSlot(state.guests, line.s);
+        const profile = profileForGuestSlot(state.guests, state.customGuests, line.s);
         turnAudio.prefetch({
           turnId: `L${i}`,
           text: line.x,
@@ -254,7 +262,7 @@ export function Experience() {
       for (const i of [idx + 1, idx + 2]) {
         const line = script[i];
         if (!line) continue;
-        const profile = profileForGuestSlot(state.guests, line.s);
+        const profile = profileForGuestSlot(state.guests, state.customGuests, line.s);
         turnAudio.prefetch({
           turnId: `J${i}`,
           text: line.x,
@@ -272,6 +280,7 @@ export function Experience() {
     state.liveScript,
     state.liveJoinLines,
     state.guests,
+    state.customGuests,
     view.isEpisode,
   ]);
 
@@ -331,6 +340,9 @@ export function Experience() {
           const result = await interact({
             sessionId: snapshot.sessionId,
             message: question,
+            ...(snapshot.targetGuestId
+              ? { targetGuestId: snapshot.targetGuestId }
+              : {}),
           });
           const sources = { ...(snapshot.liveSources ?? {}) };
           const joinLines = adaptInteractTurnsToJoinLines(
@@ -379,13 +391,45 @@ export function Experience() {
         return next.length ? { ...prev, topics: next } : prev;
       }),
     pickDepth: (label) => setState((prev) => ({ ...prev, depth: label })),
-    toggleGuest: (id: GuestKey) =>
+    toggleGuest: (id: string) =>
       setState((prev) => {
         const on = prev.guests.includes(id);
-        if (on) return { ...prev, guests: prev.guests.filter((x) => x !== id) };
+        if (on) {
+          return {
+            ...prev,
+            guests: prev.guests.filter((x) => x !== id),
+            targetGuestId: prev.targetGuestId === id ? null : prev.targetGuestId,
+          };
+        }
         if (prev.guests.length < 3) return { ...prev, guests: [...prev.guests, id] };
         return prev;
       }),
+    openGuestBuilder: () => setState((prev) => ({ ...prev, guestBuilderOpen: true })),
+    closeGuestBuilder: () => setState((prev) => ({ ...prev, guestBuilderOpen: false })),
+    saveCustomGuest: (input: CustomGuestInput) =>
+      setState((prev) => {
+        const profile = buildCustomGuestProfile(input);
+        const guests =
+          prev.guests.length < 3 ? [...prev.guests, profile.id] : prev.guests;
+        return {
+          ...prev,
+          customGuests: { ...prev.customGuests, [profile.id]: profile },
+          guests,
+          guestBuilderOpen: false,
+        };
+      }),
+    removeCustomGuest: (id: string) =>
+      setState((prev) => {
+        const rest = { ...prev.customGuests };
+        delete rest[id];
+        return {
+          ...prev,
+          customGuests: rest,
+          guests: prev.guests.filter((guestId) => guestId !== id),
+          targetGuestId: prev.targetGuestId === id ? null : prev.targetGuestId,
+        };
+      }),
+    setTargetGuest: (id) => setState((prev) => ({ ...prev, targetGuestId: id })),
     generate: () => {
       if (!state.guests.length) return;
       turnAudio.clear();
@@ -401,7 +445,8 @@ export function Experience() {
               language: snapshot.language,
               durationMinutes: snapshot.duration,
               depthLabel: snapshot.depth,
-              guestKeys: snapshot.guests,
+              guestIds: snapshot.guests,
+              customGuests: snapshot.customGuests,
             });
             const { session } = await generatePodcast({ config });
             const adapted = adaptSessionToExperience(session);
@@ -453,6 +498,7 @@ export function Experience() {
           ...prev,
           phase: "generating",
           setupOpen: false,
+          guestBuilderOpen: false,
           k: 0,
           t: 0,
           mode: "listen",

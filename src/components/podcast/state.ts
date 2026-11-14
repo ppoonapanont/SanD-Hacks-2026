@@ -3,8 +3,8 @@ import {
   type DemoJoinLine,
   type DemoScriptLine,
   type DemoSource,
-  type GuestKey,
 } from "@/data/mock/experience-demo";
+import type { PanelGuestProfile } from "@/lib/guests/panelProfiles";
 
 export type Phase = "setup" | "generating" | "episode";
 export type Mode = "listen" | "voice" | "research" | "joined";
@@ -17,7 +17,17 @@ export interface ExperienceState {
   language: string;
   duration: number;
   depth: string;
-  guests: GuestKey[];
+  /** Selected panelist ids — demo keys (ada/theo/…) or custom guest ids. */
+  guests: string[];
+  /** Freeform guests created in setup, keyed by id. */
+  customGuests: Record<string, PanelGuestProfile>;
+  /** Whether the create-guest form is open in setup. */
+  guestBuilderOpen: boolean;
+  /**
+   * Who the user's next question addresses.
+   * `null` means the whole panel (moderator routes).
+   */
+  targetGuestId: string | null;
   /** Playback position, in seconds. */
   t: number;
   playing: boolean;
@@ -48,7 +58,10 @@ export const BASE_STATE: ExperienceState = {
   language: "English",
   duration: 12,
   depth: "Balanced",
-  guests: ["ada", "theo", "wren"],
+  guests: ["investor", "founder", "economist"],
+  customGuests: {},
+  guestBuilderOpen: false,
+  targetGuestId: null,
   t: 0,
   playing: false,
   mode: "listen",

@@ -1,9 +1,13 @@
 import {
-  DEMO_GUESTS,
   DEMO_TOPICS,
   HOST_PROFILE,
   type GuestKey,
 } from "@/data/mock/experience-demo";
+import {
+  panelProfileToGuest,
+  resolvePanelProfile,
+  type PanelGuestProfile,
+} from "@/lib/guests/panelProfiles";
 import type { DiscussionDepth, Guest, PodcastConfig } from "@/types";
 
 const DEPTH_MAP: Record<string, DiscussionDepth> = {
@@ -24,17 +28,7 @@ export function mapTopicIdsToLabels(topicIds: string[]): string[] {
 }
 
 export function mapGuestKeyToGuest(key: GuestKey): Guest {
-  const profile = DEMO_GUESTS[key];
-  return {
-    id: key,
-    name: profile.name,
-    type: "fictional",
-    expertise: profile.role,
-    personality: profile.style,
-    perspective: profile.role,
-    communicationStyle: profile.style,
-    voiceId: profile.voiceId,
-  };
+  return panelProfileToGuest(resolvePanelProfile(key, {}) as PanelGuestProfile);
 }
 
 export function buildPodcastConfig(input: {
@@ -43,16 +37,19 @@ export function buildPodcastConfig(input: {
   language: string;
   durationMinutes: number;
   depthLabel: string;
-  guestKeys: GuestKey[];
+  guestIds: string[];
+  customGuests: Record<string, PanelGuestProfile>;
 }): PodcastConfig {
-  const guests = input.guestKeys.map(mapGuestKeyToGuest);
+  const guests = input.guestIds.map((id) =>
+    panelProfileToGuest(resolvePanelProfile(id, input.customGuests) as PanelGuestProfile),
+  );
   return {
     topics: mapTopicIdsToLabels(input.topics),
     region: input.region,
     language: input.language,
     durationMinutes: input.durationMinutes,
     depth: mapDepthLabel(input.depthLabel),
-    guests: guests.length ? guests : [mapGuestKeyToGuest("ada")],
+    guests: guests.length ? guests : [mapGuestKeyToGuest("economist")],
   };
 }
 

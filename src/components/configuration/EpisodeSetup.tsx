@@ -1,5 +1,6 @@
 import type { ExperienceView } from "@/components/podcast/deriveExperienceView";
 import type { ExperienceHandlers } from "@/components/podcast/handlers";
+import { CustomGuestBuilder } from "@/components/guests/CustomGuestBuilder";
 import { GuestAvatar } from "@/components/guests/GuestAvatar";
 import { HOST_PROFILE } from "@/data/mock/experience-demo";
 
@@ -242,37 +243,73 @@ export function EpisodeSetup({ view, handlers }: EpisodeSetupProps) {
           <legend style={{ ...label, marginBottom: 12 }}>Guests · {view.guestCount}/3</legend>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: 10 }}>
             {view.guestOptions.map((g) => (
-              <button
-                key={g.id}
-                type="button"
-                onClick={() => handlers.toggleGuest(g.id)}
-                disabled={g.disabled}
-                aria-pressed={g.on}
-                style={{
-                  display: "flex",
-                  gap: 14,
-                  alignItems: "center",
-                  textAlign: "left",
-                  padding: 14,
-                  borderRadius: 16,
-                  color: "#eef1f3",
-                  background: g.background,
-                  border: `1.5px solid ${g.border}`,
-                  opacity: g.opacity,
-                }}
-              >
-                <GuestAvatar initials={g.initials} avatarKey={g.avatarKey} />
-                <span style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 2 }}>
-                  <span style={{ fontSize: 15, fontWeight: 600 }}>{g.name}</span>
-                  <span style={{ fontSize: 13, color: "#b6bfc1" }}>{g.role}</span>
-                </span>
-                {g.on && (
-                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#97acc8" strokeWidth={2.4} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                    <path d="m5 12.5 4.5 4.5L19 7.5" />
-                  </svg>
+              <div key={g.id} style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                <button
+                  type="button"
+                  onClick={() => handlers.toggleGuest(g.id)}
+                  disabled={g.disabled}
+                  aria-pressed={g.on}
+                  style={{
+                    display: "flex",
+                    gap: 14,
+                    alignItems: "center",
+                    textAlign: "left",
+                    padding: 14,
+                    borderRadius: 16,
+                    color: "#eef1f3",
+                    background: g.background,
+                    border: `1.5px solid ${g.border}`,
+                    opacity: g.opacity,
+                    cursor: g.disabled ? "not-allowed" : "pointer",
+                    width: "100%",
+                  }}
+                >
+                  <GuestAvatar initials={g.initials} avatarKey={g.avatarKey} />
+                  <span style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 2 }}>
+                    <span style={{ fontSize: 15, fontWeight: 600 }}>
+                      {g.name}
+                      {g.isCustom ? (
+                        <span style={{ marginLeft: 8, fontSize: 11, fontWeight: 600, letterSpacing: "0.06em", textTransform: "uppercase", color: "#97acc8" }}>
+                          Custom
+                        </span>
+                      ) : null}
+                    </span>
+                    <span style={{ fontSize: 13, color: "#b6bfc1" }}>{g.role}</span>
+                  </span>
+                  {g.on && (
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#97acc8" strokeWidth={2.4} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                      <path d="m5 12.5 4.5 4.5L19 7.5" />
+                    </svg>
+                  )}
+                </button>
+                {g.isCustom && (
+                  <button
+                    type="button"
+                    onClick={() => handlers.removeCustomGuest(g.id)}
+                    style={{
+                      alignSelf: "flex-start",
+                      background: "transparent",
+                      color: "#b6bfc1",
+                      border: "none",
+                      fontSize: 12,
+                      padding: "4px 8px",
+                      cursor: "pointer",
+                      minHeight: 32,
+                    }}
+                  >
+                    Remove custom guest
+                  </button>
                 )}
-              </button>
+              </div>
             ))}
+            <CustomGuestBuilder
+              open={view.guestBuilderOpen}
+              onOpen={handlers.openGuestBuilder}
+              onClose={handlers.closeGuestBuilder}
+              onSave={handlers.saveCustomGuest}
+              canAdd
+              usedVoiceIds={view.usedVoiceIds}
+            />
             <div
               style={{
                 display: "flex",
@@ -286,7 +323,7 @@ export function EpisodeSetup({ view, handlers }: EpisodeSetupProps) {
               <GuestAvatar initials={HOST_PROFILE.initials} avatarKey={HOST_PROFILE.avatarKey} />
               <span style={{ display: "flex", flexDirection: "column", gap: 2 }}>
                 <span style={{ fontSize: 15, fontWeight: 600 }}>{HOST_PROFILE.name}</span>
-                <span style={{ fontSize: 13, color: "#b6bfc1" }}>Host</span>
+                <span style={{ fontSize: 13, color: "#b6bfc1" }}>Host · always on</span>
               </span>
             </div>
           </div>

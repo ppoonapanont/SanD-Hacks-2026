@@ -95,9 +95,9 @@ export default function HomePage() {
           >
             <div style={{ display: "flex", gap: 16, alignItems: "center" }}>
               <GuestAvatar initials="Mi" avatarKey="host" size={52} opacity={0.5} />
-              <GuestAvatar initials="AL" avatarKey="ada" size={52} opacity={0.5} />
-              <GuestAvatar initials="TO" avatarKey="theo" size={52} active />
-              <GuestAvatar initials="WH" avatarKey="wren" size={52} opacity={0.5} />
+              <GuestAvatar initials="JB" avatarKey="investor" size={52} opacity={0.5} />
+              <GuestAvatar initials="AC" avatarKey="founder" size={52} active />
+              <GuestAvatar initials="MH" avatarKey="economist" size={52} opacity={0.5} />
               <span className="eq" style={{ color: "#8fcaa8", marginLeft: "auto" }} aria-hidden="true">
                 <span />
                 <span />
@@ -112,10 +112,24 @@ export default function HomePage() {
               <div style={{ flex: "18 1 0", height: 5, borderRadius: 3, background: "rgba(182,191,193,0.2)" }} />
               <div style={{ flex: "12 1 0", height: 5, borderRadius: 3, background: "rgba(182,191,193,0.2)" }} />
             </div>
-            <p style={{ margin: 0, fontSize: 17, lineHeight: 1.5 }}>
-              <span style={{ color: "#8fcaa8", fontWeight: 600 }}>Theo · </span>
-              Watch turnover, not surveys.
-            </p>
+            <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+              <p style={{ margin: 0, fontSize: 16, lineHeight: 1.5, opacity: 0.55 }}>
+                <span style={{ color: "#97acc8", fontWeight: 600 }}>Mira · </span>
+                New chip export rules just landed. Jordan, what are markets seeing?
+              </p>
+              <p style={{ margin: 0, fontSize: 16, lineHeight: 1.5, opacity: 0.7 }}>
+                <span style={{ color: "#e8d27a", fontWeight: 600 }}>Jordan · </span>
+                Semiconductor names sold off before the ink was dry. Investors want to know who still has access to the advanced nodes.
+              </p>
+              <p style={{ margin: 0, fontSize: 17, lineHeight: 1.5 }}>
+                <span style={{ color: "#8fcaa8", fontWeight: 600 }}>Ava · </span>
+                And founders feel it next. If you can&apos;t get the chips you designed for, the roadmap slips — not the press release.
+              </p>
+              <p style={{ margin: 0, fontSize: 16, lineHeight: 1.5, opacity: 0.85 }}>
+                <span style={{ color: "#e3b98a", fontWeight: 600 }}>Marcus · </span>
+                Zoom out and it&apos;s a trade story. Once supply chains fragment, prices and alliances take the hit together.
+              </p>
+            </div>
             <div
               style={{
                 alignSelf: "flex-end",
@@ -127,7 +141,7 @@ export default function HomePage() {
                 fontWeight: 500,
               }}
             >
-              Does this work for hospitals?
+              How will China respond?
             </div>
             <div
               style={{

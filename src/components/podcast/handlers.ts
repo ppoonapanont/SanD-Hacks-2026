@@ -1,4 +1,4 @@
-import type { GuestKey } from "@/data/mock/experience-demo";
+import type { CustomGuestInput } from "@/lib/guests/panelProfiles";
 
 import type { SuggestionView } from "./deriveExperienceView";
 
@@ -10,7 +10,12 @@ export interface ExperienceHandlers {
   setDuration: (value: number) => void;
   toggleTopic: (id: string) => void;
   pickDepth: (label: string) => void;
-  toggleGuest: (id: GuestKey) => void;
+  toggleGuest: (id: string) => void;
+  openGuestBuilder: () => void;
+  closeGuestBuilder: () => void;
+  saveCustomGuest: (input: CustomGuestInput) => void;
+  removeCustomGuest: (id: string) => void;
+  setTargetGuest: (id: string | null) => void;
   generate: () => void;
   seekTo: (seconds: number) => void;
   seekFraction: (fraction: number) => void;

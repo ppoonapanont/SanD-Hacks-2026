@@ -1,24 +1,25 @@
 import {
   DEMO_DEPTHS,
-  DEMO_GUESTS,
   DEMO_JOIN_LINES,
   DEMO_SCRIPT,
   DEMO_SOURCES,
   DEMO_SUGGESTIONS,
   DEMO_TOPICS,
   GUEST_ORDER,
-  HOST_PROFILE,
-  type DemoGuestProfile,
-  type GuestKey,
   type SpeakerCode,
 } from "@/data/mock/experience-demo";
 import type { AvatarKey } from "@/components/guests/avatarCharacters";
+import {
+  resolvePanelProfile,
+  type HostOrGuestProfile,
+  type PanelGuestProfile,
+} from "@/lib/guests/panelProfiles";
 import { formatSeconds } from "@/utils/time";
 
 import { playerTheme, type PlayerTheme } from "./theme";
 import { currentChapter, getChapters, type Chapter, type ExperienceState } from "./state";
 
-type Profile = DemoGuestProfile | typeof HOST_PROFILE;
+type Profile = HostOrGuestProfile;
 
 export interface MemberView {
   key: string;
@@ -111,7 +112,7 @@ export interface DepthOptionView {
 }
 
 export interface GuestOptionView {
-  id: GuestKey;
+  id: string;
   name: string;
   role: string;
   style: string;
@@ -124,6 +125,20 @@ export interface GuestOptionView {
   opacity: number;
   border: string;
   background: string;
+  isCustom: boolean;
+}
+
+export interface AddressTargetView {
+  id: string | null;
+  label: string;
+  short: string;
+  initials?: string;
+  avatarKey?: AvatarKey;
+  color?: string;
+  on: boolean;
+  bg: string;
+  fg: string;
+  border: string;
 }
 
 export interface StepView {
@@ -198,6 +213,14 @@ export interface ExperienceView {
   note: string;
   draft: string;
   composerPlaceholder: string;
+  askLabel: string;
+  sendAriaLabel: string;
+  addressTargets: AddressTargetView[];
+  targetGuestId: string | null;
+  targetGuestLabel: string;
+  guestBuilderOpen: boolean;
+  /** Voice IDs already used by the selected panel (for custom-guest defaults). */
+  usedVoiceIds: string[];
   sourceList: SourceCardView[];
   sourceCount: number;
   waveDelays: number[];
@@ -205,10 +228,6 @@ export interface ExperienceView {
   depthList: DepthOptionView[];
   guestOptions: GuestOptionView[];
   suggestions: SuggestionView[];
-}
-
-function profileFor(id: string): Profile {
-  return id === "host" ? HOST_PROFILE : DEMO_GUESTS[id as GuestKey];
 }
 
 /** Pure projection from raw Experience state to everything the UI needs to render. */
@@ -223,13 +242,16 @@ export function deriveExperienceView(state: ExperienceState): ExperienceView {
   const isLight = isEpisode && mode === "joined";
   const theme = playerTheme(isLight, isEpisode && mode === "research");
 
-  const activeGuests: GuestKey[] = state.guests.length ? state.guests : ["ada"];
+  const activeGuests: string[] = state.guests.length ? state.guests : ["economist"];
   const slot: Record<SpeakerCode, string> = {
     H: "host",
     A: activeGuests[0],
     B: activeGuests[1 % activeGuests.length],
     C: activeGuests[2 % activeGuests.length],
   };
+
+  const profileFor = (id: string): Profile =>
+    resolvePanelProfile(id, state.customGuests);
 
   const episodeScript = state.liveScript ?? DEMO_SCRIPT;
   const episodeSources = state.liveSources ?? DEMO_SOURCES;
@@ -446,6 +468,82 @@ export function deriveExperienceView(state: ExperienceState): ExperienceView {
 
   const waveDelays = Array.from({ length: 28 }, (_, w) => ((w * 37) % 100) / 100);
 
+  const targetGuestId =
+    state.targetGuestId && activeGuests.includes(state.targetGuestId)
+      ? state.targetGuestId
+      : null;
+  const targetProfile = targetGuestId ? profileFor(targetGuestId) : null;
+  const targetGuestLabel = targetProfile ? targetProfile.short : "the panel";
+  const askLabel = targetProfile
+    ? `Ask ${targetProfile.short} a question`
+    : "Ask the panel a question";
+  const sendAriaLabel = targetProfile
+    ? `Send to ${targetProfile.short}`
+    : "Send to the panel";
+  const composerPlaceholder = targetProfile
+    ? mode === "joined"
+      ? `Follow up with ${targetProfile.short}…`
+      : `Ask ${targetProfile.short}…`
+    : mode === "joined"
+      ? "Follow up…"
+      : "Ask or steer…";
+
+  const chipOn = (on: boolean) => ({
+    bg: on ? "#97acc8" : "transparent",
+    fg: on ? "#051230" : theme.ink,
+    border: on ? "#97acc8" : theme.line,
+  });
+
+  const addressTargets: AddressTargetView[] = [
+    {
+      id: null,
+      label: "Panel",
+      short: "Panel",
+      on: targetGuestId === null,
+      ...chipOn(targetGuestId === null),
+    },
+    ...activeGuests.map((id) => {
+      const p = profileFor(id);
+      const on = targetGuestId === id;
+      return {
+        id,
+        label: p.name,
+        short: p.short,
+        initials: p.initials,
+        avatarKey: p.avatarKey,
+        color: p.color,
+        on,
+        ...chipOn(on),
+      };
+    }),
+  ];
+
+  function toGuestOption(profile: PanelGuestProfile): GuestOptionView {
+    const on = state.guests.includes(profile.id);
+    const disabled = !on && state.guests.length >= 3;
+    return {
+      id: profile.id,
+      name: profile.name,
+      role: profile.role,
+      style: profile.style,
+      color: profile.color,
+      radius: profile.radius,
+      initials: profile.initials,
+      avatarKey: profile.avatarKey,
+      on,
+      disabled,
+      opacity: disabled ? 0.45 : 1,
+      border: on ? profile.color : "rgba(182,191,193,0.2)",
+      background: on ? "rgba(151,172,200,0.10)" : "transparent",
+      isCustom: profile.isCustom,
+    };
+  }
+
+  const guestOptions: GuestOptionView[] = [
+    ...GUEST_ORDER.map((id) => toGuestOption(profileFor(id) as PanelGuestProfile)),
+    ...Object.values(state.customGuests).map(toGuestOption),
+  ];
+
   return {
     theme,
     pill,
@@ -496,7 +594,14 @@ export function deriveExperienceView(state: ExperienceState): ExperienceView {
     hasNote: !!state.note && mode === "listen",
     note: state.note,
     draft: state.draft,
-    composerPlaceholder: mode === "joined" ? "Follow up…" : "Ask or steer…",
+    composerPlaceholder,
+    askLabel,
+    sendAriaLabel,
+    addressTargets,
+    targetGuestId,
+    targetGuestLabel,
+    guestBuilderOpen: state.guestBuilderOpen,
+    usedVoiceIds: activeGuests.map((id) => profileFor(id).voiceId),
     sourceList,
     sourceCount: sourceIds.length,
     waveDelays,
@@ -522,26 +627,7 @@ export function deriveExperienceView(state: ExperienceState): ExperienceView {
         border: on ? "#97acc8" : "rgba(182,191,193,0.3)",
       };
     }),
-    guestOptions: GUEST_ORDER.map((id) => {
-      const p = DEMO_GUESTS[id];
-      const on = state.guests.includes(id);
-      const disabled = !on && state.guests.length >= 3;
-      return {
-        id,
-        name: p.name,
-        role: p.role,
-        style: p.style,
-        color: p.color,
-        radius: p.radius,
-        initials: p.initials,
-        avatarKey: p.avatarKey,
-        on,
-        disabled,
-        opacity: disabled ? 0.45 : 1,
-        border: on ? p.color : "rgba(182,191,193,0.2)",
-        background: on ? "rgba(151,172,200,0.10)" : "transparent",
-      };
-    }),
+    guestOptions,
     suggestions: DEMO_SUGGESTIONS,
   };
 }

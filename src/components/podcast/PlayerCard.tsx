@@ -325,7 +325,9 @@ export function PlayerCard({ view, handlers }: PlayerCardProps) {
                     color: view.youBubble.fg,
                   }}
                 >
-                  <span style={{ fontSize: 12, fontWeight: 600, letterSpacing: "0.08em", textTransform: "uppercase", opacity: 0.8 }}>You</span>
+                  <span style={{ fontSize: 12, fontWeight: 600, letterSpacing: "0.08em", textTransform: "uppercase", opacity: 0.8 }}>
+                    You · to {view.targetGuestLabel}
+                  </span>
                   <span style={{ fontSize: 16, lineHeight: 1.45 }}>{view.question}</span>
                 </div>
               </>
@@ -431,6 +433,56 @@ export function PlayerCard({ view, handlers }: PlayerCardProps) {
           <div style={{ display: "flex", flexDirection: "column", gap: 12, padding: 16, borderRadius: 20, background: view.theme.card, border: `1px solid ${view.theme.line}` }}>
             {view.showComposer && (
               <>
+                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                  <span
+                    style={{
+                      fontSize: 12,
+                      fontWeight: 600,
+                      letterSpacing: "0.1em",
+                      textTransform: "uppercase",
+                      color: view.theme.sub,
+                    }}
+                  >
+                    Address
+                  </span>
+                  <div
+                    role="group"
+                    aria-label="Who to address"
+                    style={{ display: "flex", gap: 8, flexWrap: "wrap" }}
+                  >
+                    {view.addressTargets.map((target) => (
+                      <button
+                        key={target.id ?? "panel"}
+                        type="button"
+                        onClick={() => handlers.setTargetGuest(target.id)}
+                        aria-pressed={target.on}
+                        style={{
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: 8,
+                          padding: target.avatarKey ? "6px 12px 6px 6px" : "8px 14px",
+                          borderRadius: 999,
+                          fontSize: 13,
+                          fontWeight: 600,
+                          background: target.bg,
+                          color: target.fg,
+                          border: `1px solid ${target.border}`,
+                          minHeight: 40,
+                          cursor: "pointer",
+                        }}
+                      >
+                        {target.avatarKey && target.initials ? (
+                          <GuestAvatar
+                            initials={target.initials}
+                            avatarKey={target.avatarKey}
+                            size={28}
+                          />
+                        ) : null}
+                        {target.short}
+                      </button>
+                    ))}
+                  </div>
+                </div>
                 <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                   {view.suggestions.map((sg) => (
                     <button
@@ -446,6 +498,7 @@ export function PlayerCard({ view, handlers }: PlayerCardProps) {
                         color: view.theme.ink,
                         border: `1px solid ${view.theme.line}`,
                         minHeight: 36,
+                        cursor: "pointer",
                       }}
                     >
                       {sg.label}
@@ -460,7 +513,7 @@ export function PlayerCard({ view, handlers }: PlayerCardProps) {
                   style={{ display: "flex", gap: 10, alignItems: "center", margin: 0 }}
                 >
                   <label htmlFor="ask" className="sr">
-                    Ask the panel a question
+                    {view.askLabel}
                   </label>
                   <input
                     id="ask"
@@ -497,6 +550,7 @@ export function PlayerCard({ view, handlers }: PlayerCardProps) {
                       alignItems: "center",
                       justifyContent: "center",
                       background: view.theme.ctrlBg,
+                      cursor: "pointer",
                     }}
                   >
                     <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={view.theme.ctrlFg} strokeWidth={2} strokeLinecap="round" aria-hidden="true">
@@ -506,7 +560,7 @@ export function PlayerCard({ view, handlers }: PlayerCardProps) {
                   </button>
                   <button
                     type="submit"
-                    aria-label="Send to the panel"
+                    aria-label={view.sendAriaLabel}
                     style={{
                       height: 52,
                       flex: "none",
@@ -520,6 +574,7 @@ export function PlayerCard({ view, handlers }: PlayerCardProps) {
                       fontWeight: 600,
                       background: "#97acc8",
                       color: "#051230",
+                      cursor: "pointer",
                     }}
                   >
                     Cut in

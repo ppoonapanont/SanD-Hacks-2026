@@ -9,7 +9,13 @@ import type { AvatarKey } from "@/components/guests/avatarCharacters";
  * real news or a real quote — isMock-equivalent for the UI layer.
  */
 
-export type GuestKey = "ada" | "theo" | "wren" | "sol" | "kai";
+export type GuestKey =
+  | "investor"
+  | "founder"
+  | "economist"
+  | "historian"
+  | "politician"
+  | "diplomat";
 export type SpeakerCode = "H" | "A" | "B" | "C";
 
 export interface DemoGuestProfile {
@@ -42,74 +48,94 @@ export const HOST_PROFILE = {
 };
 
 export const DEMO_GUESTS: Record<GuestKey, DemoGuestProfile> = {
-  ada: {
-    id: "ada",
-    name: "Dr. Ada Lin",
-    short: "Ada",
-    role: "Labor economist",
-    style: "Data-first skeptic",
-    color: "#e3b98a",
-    radius: "16px",
-    initials: "AL",
-    avatarKey: "ada",
-    /** ElevenLabs stock voice "Sarah" (Mature, Reassuring, Confident — female, American). */
-    voiceId: "EXAVITQu4vr4xnSDxMaL",
-  },
-  theo: {
-    id: "theo",
-    name: "Theo Okafor",
-    short: "Theo",
-    role: "Operations strategist",
-    style: "Pragmatic builder",
-    color: "#8fcaa8",
-    radius: "50% 50% 50% 12px",
-    initials: "TO",
-    avatarKey: "theo",
-    /** ElevenLabs stock voice "Chris" (Charming, Down-to-Earth — male, American). */
-    voiceId: "iP95p4xoKVk53GoZ742B",
-  },
-  wren: {
-    id: "wren",
-    name: "Prof. Wren Hale",
-    short: "Wren",
-    role: "Historian of work",
-    style: "Long-view contrarian",
-    color: "#e29fb0",
-    radius: "12px 50% 12px 50%",
-    initials: "WH",
-    avatarKey: "wren",
-    /** ElevenLabs stock voice "George" (Warm, Captivating Storyteller — male, British). */
-    voiceId: "JBFqnCBsd6RMkjVDRZzb",
-  },
-  sol: {
-    id: "sol",
-    name: "Sol Rivera",
-    short: "Sol",
-    role: "Behavioral scientist",
-    style: "Asks why people act",
-    color: "#b6a6e6",
-    radius: "50% 50% 12px 12px",
-    initials: "SR",
-    avatarKey: "sol",
-    /** ElevenLabs stock voice "Laura" (Enthusiast, Quirky Attitude — female, American). */
-    voiceId: "FGY2WhTYpPnrIDTdsKH5",
-  },
-  kai: {
-    id: "kai",
-    name: "Kai Mori",
-    short: "Kai",
-    role: "Markets analyst",
-    style: "Follows the money",
+  investor: {
+    id: "investor",
+    name: "Jordan Blake",
+    short: "Jordan",
+    role: "Investor",
+    style: "How will this affect semiconductor stocks?",
     color: "#e8d27a",
     radius: "6px",
-    initials: "KM",
-    avatarKey: "kai",
+    initials: "JB",
+    avatarKey: "investor",
     /** ElevenLabs stock voice "Eric" (Smooth, Trustworthy — male, American). */
     voiceId: "cjVigY5qzO86Huf0OWal",
   },
+  founder: {
+    id: "founder",
+    name: "Ava Chen",
+    short: "Ava",
+    role: "Tech Founder",
+    style: "How will this affect innovation?",
+    color: "#8fcaa8",
+    radius: "16px",
+    initials: "AC",
+    avatarKey: "founder",
+    /** ElevenLabs stock voice "Laura" (Enthusiast, Quirky Attitude — female, American). */
+    voiceId: "FGY2WhTYpPnrIDTdsKH5",
+  },
+  economist: {
+    id: "economist",
+    name: "Dr. Marcus Hale",
+    short: "Marcus",
+    role: "Economist",
+    style: "What are the consequences for global trade?",
+    color: "#e3b98a",
+    radius: "50% 50% 50% 12px",
+    initials: "MH",
+    avatarKey: "economist",
+    /** ElevenLabs stock voice "Sarah" (Mature, Reassuring, Confident — female, American). */
+    voiceId: "EXAVITQu4vr4xnSDxMaL",
+  },
+  historian: {
+    id: "historian",
+    name: "Prof. Lena Okonkwo",
+    short: "Lena",
+    role: "Historian",
+    style: "Have similar trade restrictions worked before?",
+    color: "#e29fb0",
+    radius: "12px 50% 12px 50%",
+    initials: "LO",
+    avatarKey: "historian",
+    /** ElevenLabs stock voice "George" (Warm, Captivating Storyteller — male, British). */
+    voiceId: "JBFqnCBsd6RMkjVDRZzb",
+  },
+  politician: {
+    id: "politician",
+    name: "Rep. Sam Ortega",
+    short: "Sam",
+    role: "Politician",
+    style: "What policy should the government pursue?",
+    color: "#b6a6e6",
+    radius: "50% 50% 12px 12px",
+    initials: "SO",
+    avatarKey: "politician",
+    /** ElevenLabs stock voice "Chris" (Charming, Down-to-Earth — male, American). */
+    voiceId: "iP95p4xoKVk53GoZ742B",
+  },
+  diplomat: {
+    id: "diplomat",
+    name: "Amb. Priya Shah",
+    short: "Priya",
+    role: "Diplomat",
+    style: "How will China respond?",
+    color: "#97acc8",
+    radius: "18px 18px 6px 18px",
+    initials: "PS",
+    avatarKey: "diplomat",
+    /** ElevenLabs stock voice "Brian" (Deep, Resonant, Comforting — male, American). */
+    voiceId: "nPczCjzIPdrG82nA3q9T",
+  },
 };
 
-export const GUEST_ORDER: GuestKey[] = ["ada", "theo", "wren", "sol", "kai"];
+export const GUEST_ORDER: GuestKey[] = [
+  "investor",
+  "founder",
+  "economist",
+  "historian",
+  "politician",
+  "diplomat",
+];
 
 /**
  * Closed topic selection ("What do you want to know today?") modeled on NYTimes
@@ -153,32 +179,32 @@ export interface DemoSource {
 
 export const DEMO_SOURCES: Record<number, DemoSource> = {
   1: {
-    title: "Logistics operator moves to a four-day week after pilot",
-    outlet: "The Freight Ledger",
+    title: "U.S. tightens export licenses on advanced AI chips",
+    outlet: "The Trade Desk",
     date: "Nov 12",
-    note: "Company-wide rollout follows a pilot across its warehouse sites.",
+    note: "New rules expand licensing for high-bandwidth memory and advanced accelerators.",
   },
   2: {
-    title: "Regional public-sector four-day trial opens",
-    outlet: "Civic Wire",
+    title: "Suppliers redraw China-facing chip routes",
+    outlet: "Supply Chain Wire",
     date: "Nov 11",
-    note: "Departments can apply to join a year-long trial.",
+    note: "Vendors begin dual-tracking customers under updated controls.",
   },
   3: {
-    title: "Why self-reported productivity is a weak signal",
-    outlet: "Workplace Research Quarterly",
+    title: "Why export bans move stock prices faster than capability",
+    outlet: "Markets Research Quarterly",
     date: "Oct 2026",
-    note: "A review of how pilot studies measure output.",
+    note: "A review of how markets price technology restrictions.",
   },
   4: {
-    title: "Coverage roles and the compressed week",
-    outlet: "Labor Review",
+    title: "Startups and the older-node workaround",
+    outlet: "Founders Review",
     date: "Nov 9",
-    note: "How shift-based jobs adapt when hours shrink.",
+    note: "How smaller teams redesign products when leading-edge access shrinks.",
   },
   5: {
-    title: "Hospitals test compressed rotations for nurses",
-    outlet: "Health Systems Weekly",
+    title: "Historical playbook: when trade curbs invite counters",
+    outlet: "Diplomatic Brief",
     date: "Nov 13",
     note: "Found while researching your question.",
   },
@@ -192,26 +218,26 @@ export interface DemoScriptLine {
 }
 
 export const DEMO_SCRIPT: DemoScriptLine[] = [
-  { t: 0, s: "H", x: "Welcome back. Another wave of companies announced four-day-week pilots this week, and our panel does not agree on what it means." },
-  { t: 14, s: "A", x: "I'll start with the uncomfortable part: the pilots that make headlines are the ones that worked." },
-  { t: 34, s: "B", x: "Sure, but the ones that worked didn't just cut a day. They cut meetings and rewrote how work flows." },
-  { t: 58, s: "C", x: "We have been here before. The weekend itself was once a fight people called impossible." },
+  { t: 0, s: "H", x: "Welcome back. New export controls are hitting advanced chips, and our panel does not agree on what comes next." },
+  { t: 14, s: "A", x: "Markets already flinched. If fabs and toolmakers get squeezed, semiconductor stocks will feel it first." },
+  { t: 34, s: "B", x: "And founders feel it next. When you choke the supply chain, you don't just raise prices — you slow the next product cycle." },
+  { t: 58, s: "C", x: "Zoom out: trade frictions like this ripple through shipping, pricing, and alliances long before the politics settle." },
   { t: 90, s: "H", x: "Let's ground this. What actually changed this week?" },
-  { t: 104, s: "A", x: "Two things: a large logistics firm went company-wide after its pilot, and a regional government opened a public-sector trial.", c: [1, 2] },
-  { t: 142, s: "B", x: "The logistics one matters more. That's shift work, not a software team with flexible hours.", c: [1] },
-  { t: 186, s: "C", x: "And the public trial is the real test: unions, budgets, voters. Entirely different incentives.", c: [2] },
-  { t: 240, s: "H", x: "So does output actually hold up?" },
-  { t: 254, s: "A", x: "Honestly, it depends on how you measure. Self-reported productivity is the easiest thing to inflate.", c: [3] },
-  { t: 300, s: "B", x: "Which is why I watch error rates and turnover, not surveys. Those are harder to fake." },
-  { t: 352, s: "C", x: "Turnover is the sleeper metric. Replacing people costs more than most managers admit." },
-  { t: 420, s: "H", x: "Who gets left out of this?" },
-  { t: 434, s: "B", x: "Anyone whose job is defined by coverage. You can't compress a night shift.", c: [4] },
-  { t: 482, s: "A", x: "Then it becomes a staffing question, and staffing is a budget question, not a culture one." },
-  { t: 540, s: "C", x: "Historically, that is exactly where reforms stall. They reach some workers decades before others." },
+  { t: 104, s: "A", x: "Two things: tighter licensing on high-end chips, and suppliers racing to redraw who they can sell to.", c: [1, 2] },
+  { t: 142, s: "B", x: "The licensing one matters more for builders. Uncertainty kills roadmaps faster than a clear ban.", c: [1] },
+  { t: 186, s: "C", x: "And the redraw is the real stress test for global trade. Once routes fragment, they rarely snap back cleanly.", c: [2] },
+  { t: 240, s: "H", x: "So do restrictions like this actually work?" },
+  { t: 254, s: "A", x: "Depends what you mean by work. Stock prices react overnight. Capability gaps take years.", c: [3] },
+  { t: 300, s: "B", x: "Which is why I watch where R&D relocates, not just the headline ban." },
+  { t: 352, s: "C", x: "History says partners adapt. The question is whether adaptation looks like compliance or workarounds." },
+  { t: 420, s: "H", x: "Who absorbs the cost?" },
+  { t: 434, s: "B", x: "Smaller firms first. They can't dual-source overnight the way giants can.", c: [4] },
+  { t: 482, s: "A", x: "Then it becomes a capital question — who can wait out the disruption." },
+  { t: 540, s: "C", x: "And a diplomatic one. Retaliation rarely mirrors the original tool; it hits somewhere softer." },
   { t: 600, s: "H", x: "Last segment. What should listeners watch for?" },
-  { t: 614, s: "A", x: "Whether the logistics firm keeps it through its busy season.", c: [1] },
-  { t: 650, s: "B", x: "Whether anyone publishes the boring data: error rates, sick days, attrition." },
-  { t: 688, s: "C", x: "And whether it ever becomes policy anywhere, or stays a perk." },
+  { t: 614, s: "A", x: "Whether chipmakers revise guidance, not just issue statements.", c: [1] },
+  { t: 650, s: "B", x: "Whether startups quietly redesign products around older nodes." },
+  { t: 688, s: "C", x: "And whether counterparties answer with tariffs, export bans, or something quieter." },
   { t: 710, s: "H", x: "That's our panel. Thanks for listening, and for jumping in." },
 ];
 
@@ -223,17 +249,17 @@ export interface DemoJoinLine {
 
 export const DEMO_JOIN_LINES: DemoJoinLine[] = [
   { s: "H", x: "Good question. Let me bring that to the panel." },
-  { s: "B", x: "Hospitals are the hard case. Coverage roles need more people, not the same people working fewer days.", c: [4] },
-  { s: "C", x: "A few hospital systems are testing compressed rotations instead: longer shifts, fewer days. It trades one strain for another.", c: [5] },
-  { s: "A", x: "So in a hospital, a four-day week is a staffing budget decision before it is anything else." },
+  { s: "B", x: "Innovation slows when teams can't get the parts they planned around. You don't cancel the roadmap — you stretch it.", c: [4] },
+  { s: "C", x: "We've seen versions of this before. Restrictions can buy time, but they rarely freeze the other side's progress forever.", c: [5] },
+  { s: "A", x: "So for markets, the near-term hit is valuation. The longer question is who owns the next generation of capacity." },
   { s: "H", x: "Want to keep going? Ask a follow-up, or head back to where we were." },
 ];
 
-export const DEMO_VOICE_QUESTION = "Wait, does this actually work for hospitals?";
+export const DEMO_VOICE_QUESTION = "Wait — how will China respond to this?";
 
 export const DEMO_SUGGESTIONS: { label: string; q?: string; skip?: boolean }[] = [
-  { label: "Hospitals?", q: "What about hospitals?" },
-  { label: "Simpler", q: "Explain that more simply." },
-  { label: "Push back", q: "Push back on that." },
+  { label: "China?", q: "How will China respond?" },
+  { label: "Stocks", q: "How will this affect semiconductor stocks?" },
+  { label: "History", q: "Have similar trade restrictions worked before?" },
   { label: "Skip ahead", skip: true },
 ];
