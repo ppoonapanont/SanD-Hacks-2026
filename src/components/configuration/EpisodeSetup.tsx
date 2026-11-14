@@ -106,8 +106,11 @@ export function EpisodeSetup({ view, handlers }: EpisodeSetupProps) {
 
       <div style={{ display: "flex", flexWrap: "wrap", gap: 28 }}>
         <div style={{ flex: "1 1 380px", minWidth: 0, display: "flex", flexDirection: "column", gap: 22 }}>
-          <fieldset style={{ border: "none", margin: 0, padding: 0, display: "flex", flexDirection: "column", gap: 12 }}>
-            <legend style={{ ...label, marginBottom: 12 }}>Topics</legend>
+          <fieldset style={{ border: "none", margin: 0, padding: 0, display: "flex", flexDirection: "column", gap: 10 }}>
+            <legend style={{ ...label, marginBottom: 0 }}>Topics</legend>
+            <p style={{ margin: 0, fontFamily: "'Space Grotesk', sans-serif", fontSize: 20, fontWeight: 600, letterSpacing: "-0.01em" }}>
+              What do you want to know today?
+            </p>
             <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
               {view.topicList.map((tp) => (
                 <button

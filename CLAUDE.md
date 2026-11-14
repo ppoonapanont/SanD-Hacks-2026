@@ -85,7 +85,7 @@ Status key: `COMPLETE` | `PARTIAL` | `STUB` | `NOT STARTED`
 | Item | Status | Notes |
 |------|--------|-------|
 | Home page | STUB | Scaffold route only |
-| Topic selection | NOT STARTED | |
+| Topic selection | COMPLETE | Closed multi-select chips, not free text — NYTimes-style sections (World, U.S., Politics, Business, Technology, Science, Health, Climate, Sports, Arts) in `src/data/mock/experience-demo.ts` |
 | Duration and depth controls | NOT STARTED | |
 | Guest selection and customization | STUB | Mock guests listed on `/configure` |
 
@@ -147,7 +147,8 @@ All P1 items: **NOT STARTED** (interact/resume routes exist as 501 stubs only).
 ## 1. Personalized Podcast Generation
 
 - Retrieve current news from multiple online sources.
-- Allow users to select topics, interests, geographical regions, and languages.
+- Let users pick topics from a closed, curated selection ("What do you want to know today?") rather than open-ended text entry — currently modeled on NYTimes section names (World, U.S., Politics, Business, Technology, Science, Health, Climate, Sports, Arts).
+- Allow users to select geographical regions and languages.
 - Allow users to select podcast duration between 2 and 30 minutes.
 - Allow users to independently customize discussion depth and complexity.
 - Generate natural, multi-speaker podcast discussions.
@@ -700,7 +701,7 @@ This is the entire rest of the product. Setup, generation, playback, interruptio
 
 ### Setup (collapsible, shown before generation)
 
-- Select news topics.
+- Select news topics from a closed selection ("What do you want to know today?"), not open-ended text — currently NYTimes-style sections.
 - Select geographical region and language.
 - Adjust podcast duration using a 2–30 minute slider.
 - Select discussion depth.
@@ -861,7 +862,7 @@ Primary paths: `src/components/`, `src/app/` pages, `src/services/elevenlabs/`, 
 ### Task 1: Podcast Setup UI
 
 - Home page. — STUB
-- Topic selection. — NOT STARTED
+- Topic selection. — COMPLETE (closed NYTimes-style section chips, not free text)
 - Duration and depth controls. — NOT STARTED
 - Guest selection and customization. — STUB
 

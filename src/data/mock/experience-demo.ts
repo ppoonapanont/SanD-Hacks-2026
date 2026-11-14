@@ -111,12 +111,22 @@ export const DEMO_GUESTS: Record<GuestKey, DemoGuestProfile> = {
 
 export const GUEST_ORDER: GuestKey[] = ["ada", "theo", "wren", "sol", "kai"];
 
+/**
+ * Closed topic selection ("What do you want to know today?") modeled on NYTimes
+ * section names. These labels are sent as real search queries to Bright Data, so
+ * broader section-style terms return better live results than narrow invented ones.
+ */
 export const DEMO_TOPICS: { id: string; label: string }[] = [
-  { id: "fourday", label: "Four-day work week" },
-  { id: "aiclass", label: "AI in classrooms" },
-  { id: "grid", label: "Heat and the power grid" },
-  { id: "housing", label: "Housing costs" },
-  { id: "space", label: "Commercial spaceflight" },
+  { id: "world", label: "World" },
+  { id: "us", label: "U.S." },
+  { id: "politics", label: "Politics" },
+  { id: "business", label: "Business" },
+  { id: "technology", label: "Technology" },
+  { id: "science", label: "Science" },
+  { id: "health", label: "Health" },
+  { id: "climate", label: "Climate" },
+  { id: "sports", label: "Sports" },
+  { id: "arts", label: "Arts" },
 ];
 
 export const DEMO_DEPTHS: { label: string; sub: string }[] = [

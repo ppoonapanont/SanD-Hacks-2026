@@ -40,7 +40,7 @@ export interface ExperienceState {
 export const BASE_STATE: ExperienceState = {
   phase: "setup",
   setupOpen: true,
-  topics: ["fourday"],
+  topics: ["business"],
   region: "Global",
   language: "English",
   duration: 12,
