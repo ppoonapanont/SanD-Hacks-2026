@@ -41,6 +41,9 @@ export interface InteractRequest {
 export interface InteractResponse {
   session: PodcastSession;
   turns: ConversationTurn[];
+  /** True when interrupt research fell back to mock news. */
+  usedMockResearch?: boolean;
+  errors?: string[];
 }
 
 /** POST /api/podcast/resume */

@@ -16,8 +16,16 @@ import {
   type SpeakerCode,
 } from "@/data/mock/experience-demo";
 import { useTurnAudio } from "@/hooks";
-import { generatePodcast, transcribeAudio } from "@/lib/api/client";
-import { adaptSessionToExperience } from "@/services/podcast/adaptToExperience";
+import {
+  generatePodcast,
+  interact,
+  resumePodcast,
+  transcribeAudio,
+} from "@/lib/api/client";
+import {
+  adaptInteractTurnsToJoinLines,
+  adaptSessionToExperience,
+} from "@/services/podcast/adaptToExperience";
 import { buildPodcastConfig } from "@/services/podcast/guestMap";
 import { formatSeconds } from "@/utils/time";
 
@@ -89,6 +97,31 @@ function advanceListenPastTurn(
   return { ...prev, t: scaleT(next.t, prev.duration) };
 }
 
+function advanceJoinPastTurn(
+  prev: ExperienceState,
+  turnId: string,
+): ExperienceState {
+  if (prev.phase !== "episode" || prev.mode !== "joined") return prev;
+  const match = /^J(\d+)$/.exec(turnId);
+  if (!match) return prev;
+
+  const idx = Number(match[1]);
+  // joinN is how many lines are visible; the active line is index joinN - 1.
+  if (prev.joinN - 1 !== idx) return prev;
+
+  const script = prev.liveJoinLines ?? DEMO_JOIN_LINES;
+  if (idx + 1 >= script.length) return prev;
+  return { ...prev, joinN: idx + 2, k: 0 };
+}
+
+function advancePastSpokenTurn(
+  prev: ExperienceState,
+  turnId: string,
+): ExperienceState {
+  if (turnId.startsWith("J")) return advanceJoinPastTurn(prev, turnId);
+  return advanceListenPastTurn(prev, turnId);
+}
+
 /**
  * The entire interactive Experience screen: collapsible setup, player, chapters,
  * and sources, plus the user-interruption flow (voice → research → joined → resume).
@@ -123,29 +156,18 @@ export function Experience() {
           if (noteK > 24) patch.note = "";
         }
 
-        // Listen mode: do NOT free-run the fake clock. The transcript advances
-        // when each ElevenLabs clip ends (or TTS fails) so guest voices aren't
-        // skipped while Mira's audio is still playing / still generating.
+        // Listen / joined: transcript advances on clip end (see advancePastSpokenTurn).
+        // Research: animate steps while /api/podcast/interact is in flight — do not auto-join.
         if (prev.mode === "listen" && prev.playing) {
-          // no-op for t — see advanceListenPastTurn
+          // no-op for t
         } else if (prev.mode === "research" && prev.playing) {
           const k = prev.k + 1;
-          const step = Math.floor(k / 5);
+          const step = Math.min(Math.floor(k / 5), 2);
           patch.k = k;
           patch.step = step;
           if (step >= 2) patch.found5 = true;
-          if (step >= 3) {
-            patch.mode = "joined";
-            patch.joinN = 1;
-            patch.k = 0;
-          }
-        } else if (prev.mode === "joined" && prev.playing && prev.joinN < DEMO_JOIN_LINES.length) {
-          if (prev.k + 1 >= 8) {
-            patch.joinN = prev.joinN + 1;
-            patch.k = 0;
-          } else {
-            patch.k = prev.k + 1;
-          }
+        } else if (prev.mode === "joined" && prev.playing) {
+          // no-op for joinN — advanced when each interrupt clip ends
         }
         return { ...prev, ...patch };
       });
@@ -156,7 +178,7 @@ export function Experience() {
   // Sync transcript → next speaker when the *active* line's clip finishes or TTS fails.
   useEffect(() => {
     const advance = (turnId: string) => {
-      setState((prev) => advanceListenPastTurn(prev, turnId));
+      setState((prev) => advancePastSpokenTurn(prev, turnId));
     };
     turnAudio.setOnClipEnded(advance);
     turnAudio.setOnSpeakFailed(advance);
@@ -202,39 +224,148 @@ export function Experience() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isSpeakingPhase, state.mode, state.playing, activeLineKey]);
 
-  // Prefetch the next couple of listen-mode lines so guest audio is ready
-  // before Mira's clip finishes.
+  // Prefetch the next couple of lines (episode or interrupt) so audio stays ready.
   useEffect(() => {
-    if (!view.isEpisode || state.mode !== "listen" || !state.playing) return;
-    const match = /^L(\d+)$/.exec(activeLineKey ?? "");
-    if (!match) return;
-    const idx = Number(match[1]);
-    const script: DemoScriptLine[] = state.liveScript ?? DEMO_SCRIPT;
-    for (const i of [idx + 1, idx + 2]) {
-      const line = script[i];
-      if (!line) continue;
-      const profile = profileForGuestSlot(state.guests, line.s);
-      turnAudio.prefetch({
-        turnId: `L${i}`,
-        text: line.x,
-        voiceId: profile.voiceId,
-        speakerId: `L${i}`,
-        speakerName: profile.name,
-      });
+    if (!view.isEpisode || !state.playing) return;
+    if (state.mode === "listen") {
+      const match = /^L(\d+)$/.exec(activeLineKey ?? "");
+      if (!match) return;
+      const idx = Number(match[1]);
+      const script: DemoScriptLine[] = state.liveScript ?? DEMO_SCRIPT;
+      for (const i of [idx + 1, idx + 2]) {
+        const line = script[i];
+        if (!line) continue;
+        const profile = profileForGuestSlot(state.guests, line.s);
+        turnAudio.prefetch({
+          turnId: `L${i}`,
+          text: line.x,
+          voiceId: profile.voiceId,
+          speakerId: `L${i}`,
+          speakerName: profile.name,
+        });
+      }
+      return;
+    }
+    if (state.mode === "joined") {
+      const match = /^J(\d+)$/.exec(activeLineKey ?? "");
+      if (!match) return;
+      const idx = Number(match[1]);
+      const script = state.liveJoinLines ?? DEMO_JOIN_LINES;
+      for (const i of [idx + 1, idx + 2]) {
+        const line = script[i];
+        if (!line) continue;
+        const profile = profileForGuestSlot(state.guests, line.s);
+        turnAudio.prefetch({
+          turnId: `J${i}`,
+          text: line.x,
+          voiceId: profile.voiceId,
+          speakerId: `J${i}`,
+          speakerName: profile.name,
+        });
+      }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeLineKey, state.mode, state.playing, state.liveScript, state.guests, view.isEpisode]);
+  }, [
+    activeLineKey,
+    state.mode,
+    state.playing,
+    state.liveScript,
+    state.liveJoinLines,
+    state.guests,
+    view.isEpisode,
+  ]);
 
   // Stall fallback: only if TTS never starts for this line (not while audio plays).
   useEffect(() => {
-    if (state.mode !== "listen" || !state.playing || !activeLineKey) return;
+    if (
+      (state.mode !== "listen" && state.mode !== "joined") ||
+      !state.playing ||
+      !activeLineKey
+    ) {
+      return;
+    }
     if (turnAudio.current?.turnId === activeLineKey) return;
     const turnId = activeLineKey;
     const timer = window.setTimeout(() => {
-      setState((prev) => advanceListenPastTurn(prev, turnId));
+      setState((prev) => advancePastSpokenTurn(prev, turnId));
     }, LISTEN_STALL_MS);
     return () => window.clearTimeout(timer);
   }, [activeLineKey, state.mode, state.playing, turnAudio.current?.turnId]);
+
+  /** Live interrupt via /api/podcast/interact; falls back to DEMO_JOIN_LINES. */
+  const beginInterrupt = (question: string) => {
+    turnAudio.pause();
+    turnAudio.clear();
+    lastSpokenKeyRef.current = null;
+
+    setState((prev) => {
+      const snapshot = {
+        ...prev,
+        ...startResearchPatch(question),
+        liveJoinLines: null,
+        note: "Researching your question…",
+        noteK: 0,
+      };
+
+      void (async () => {
+        const finishWithDemo = (reason?: string) => {
+          setState((cur) => ({
+            ...cur,
+            mode: "joined",
+            joinN: 1,
+            k: 0,
+            playing: true,
+            found5: true,
+            liveJoinLines: null,
+            note: reason ?? "",
+            noteK: 0,
+          }));
+        };
+
+        if (!snapshot.sessionId) {
+          window.setTimeout(() => finishWithDemo(), 1200);
+          return;
+        }
+
+        try {
+          const result = await interact({
+            sessionId: snapshot.sessionId,
+            message: question,
+          });
+          const sources = { ...(snapshot.liveSources ?? {}) };
+          const joinLines = adaptInteractTurnsToJoinLines(
+            result.turns,
+            snapshot.guests,
+            sources,
+            result.session.sources,
+          );
+          setState((cur) => ({
+            ...cur,
+            mode: "joined",
+            joinN: joinLines.length ? 1 : 0,
+            k: 0,
+            playing: true,
+            found5: true,
+            liveJoinLines: joinLines.length ? joinLines : null,
+            liveSources: Object.keys(sources).length ? sources : cur.liveSources,
+            note: result.usedMockResearch
+              ? "Interrupt research used mock/fallback sources"
+              : "Panel answering your question",
+            noteK: 0,
+          }));
+        } catch (error) {
+          console.warn("[Experience] interact failed:", error);
+          finishWithDemo(
+            error instanceof Error
+              ? `Interrupt API unavailable (${error.message}). Using demo replies.`
+              : "Interrupt API unavailable. Using demo replies.",
+          );
+        }
+      })();
+
+      return snapshot;
+    });
+  };
 
   const handlers: ExperienceHandlers = {
     toggleSetup: () => setState((prev) => ({ ...prev, setupOpen: !prev.setupOpen })),
@@ -288,6 +419,7 @@ export function Experience() {
               sessionId: adapted.sessionId,
               liveScript: adapted.script,
               liveSources: adapted.sources,
+              liveJoinLines: null,
               note: adapted.usedMockNews
                 ? "Generated with mock/fallback news — sources labeled in notes"
                 : `Generated: ${adapted.title}`,
@@ -310,6 +442,7 @@ export function Experience() {
               sessionId: null,
               liveScript: DEMO_SCRIPT,
               liveSources: DEMO_SOURCES,
+              liveJoinLines: null,
               note: `API unavailable (${message}). Playing demo script.`,
               noteK: 0,
             }));
@@ -332,6 +465,7 @@ export function Experience() {
           sessionId: null,
           liveScript: null,
           liveSources: null,
+          liveJoinLines: null,
         };
       });
     },
@@ -347,11 +481,10 @@ export function Experience() {
         return { ...prev, playing: !prev.playing };
       }),
     setDraft: (value) => setState((prev) => ({ ...prev, draft: value })),
-    submit: () =>
-      setState((prev) => {
-        const q = prev.draft.trim();
-        return q ? { ...prev, ...startResearchPatch(q) } : prev;
-      }),
+    submit: () => {
+      const q = state.draft.trim();
+      if (q) beginInterrupt(q);
+    },
     startVoice: () => {
       setState((prev) => ({ ...prev, mode: "voice", k: 0, playing: false, openCite: null, note: "" }));
       void (async () => {
@@ -376,7 +509,7 @@ export function Experience() {
     stopVoiceAndSubmit: () => {
       const recorder = mediaRecorderRef.current;
       if (!recorder) {
-        setState((prev) => ({ ...prev, ...startResearchPatch(DEMO_VOICE_QUESTION) }));
+        beginInterrupt(DEMO_VOICE_QUESTION);
         return;
       }
       mediaRecorderRef.current = null;
@@ -396,7 +529,7 @@ export function Experience() {
           } catch (error) {
             console.warn("[Experience] transcription failed, falling back to scripted question:", error);
           }
-          setState((prev) => ({ ...prev, ...startResearchPatch(text || DEMO_VOICE_QUESTION) }));
+          beginInterrupt(text || DEMO_VOICE_QUESTION);
         })();
       };
       recorder.stop();
@@ -413,7 +546,10 @@ export function Experience() {
       audioChunksRef.current = [];
       setState((prev) => ({ ...prev, mode: "listen", playing: true, k: 0 }));
     },
-    resume: () =>
+    resume: () => {
+      turnAudio.clear();
+      lastSpokenKeyRef.current = null;
+      const sessionId = state.sessionId;
       setState((prev) => {
         const chapters = getChapters(prev.duration);
         const cur = currentChapter(chapters, prev.t);
@@ -425,13 +561,20 @@ export function Experience() {
           question: "",
           openCite: null,
           k: 0,
+          liveJoinLines: null,
           note: `Back in Chapter ${cur.num} · ${formatSeconds(prev.t)}`,
           noteK: 0,
         };
-      }),
-    pickSuggestion: (suggestion: SuggestionView) =>
-      setState((prev) => {
-        if (suggestion.skip) {
+      });
+      if (sessionId) {
+        void resumePodcast({ sessionId }).catch((error) => {
+          console.warn("[Experience] resume API failed:", error);
+        });
+      }
+    },
+    pickSuggestion: (suggestion: SuggestionView) => {
+      if (suggestion.skip) {
+        setState((prev) => {
           const chapters = getChapters(prev.duration);
           const fifth = chapters[4];
           return {
@@ -441,12 +584,15 @@ export function Experience() {
             playing: true,
             joinN: 0,
             question: "",
+            liveJoinLines: null,
             note: "Skipped to Chapter 5",
             noteK: 0,
           };
-        }
-        return suggestion.q ? { ...prev, ...startResearchPatch(suggestion.q) } : prev;
-      }),
+        });
+        return;
+      }
+      if (suggestion.q) beginInterrupt(suggestion.q);
+    },
     toggleCitation: (id) => setState((prev) => ({ ...prev, openCite: prev.openCite === id ? null : id })),
   };
 

@@ -8,7 +8,7 @@ Our core differentiator is that users do not just listen to an AI-generated podc
 
 # Implementation Status
 
-Last updated: 2026-11-14 (Podcast Generator MVP + transcript-synced ElevenLabs TTS; build verified)
+Last updated: 2026-11-14 (P1 interrupt/resume MVP wired; Podcast Generator + TTS sync)
 
 Status key: `COMPLETE` | `PARTIAL` | `STUB` | `NOT STARTED`
 
@@ -35,8 +35,8 @@ Status key: `COMPLETE` | `PARTIAL` | `STUB` | `NOT STARTED`
 |--------|------|--------|-------|
 | POST | `/api/podcast/generate` | COMPLETE | Dev 1 — News Engine + Gemini script → session |
 | POST | `/api/podcast/next` | COMPLETE | Dev 1 — advances precomputed session turns |
-| POST | `/api/podcast/interact` | STUB (501) | Dev 1 — P1 interruption |
-| POST | `/api/podcast/resume` | STUB (501) | Dev 1 — P1 resume after interrupt |
+| POST | `/api/podcast/interact` | COMPLETE | Dev 1 — moderator → optional research → guest replies |
+| POST | `/api/podcast/resume` | COMPLETE | Dev 1 — clears interrupt state + host bridge turn |
 | GET | `/api/podcast/history` | COMPLETE | Shared (in-memory) |
 | GET | `/api/podcast/:id` | COMPLETE | Shared (in-memory) |
 | POST | `/api/audio/generate` | COMPLETE | Dev 2 — ElevenLabs TTS |
@@ -67,18 +67,18 @@ Status key: `COMPLETE` | `PARTIAL` | `STUB` | `NOT STARTED`
 | Custom guest personalities | PARTIAL | Experience guest map → config; mock catalog personas (not freeform create-guest yet) |
 | Structured conversation generation | COMPLETE | `/generate` builds session; `/next` walks turns; Experience loads `liveScript` |
 
-**Podcast Generator MVP complete** (direct Gemini, not Mastra). Next up for Dev 1: Agent System (`/interact`, `/resume`).
+**Podcast Generator MVP complete** (direct Gemini, not Mastra).
 
 ### Task 3: Agent System
 
 | Item | Status | Location / notes |
 |------|--------|------------------|
-| Mastra agents and workflows | STUB | `src/mastra/` folders + placeholder index |
-| Moderator logic | NOT STARTED | |
-| Guest agent coordination | NOT STARTED | |
-| User question handling | STUB | `/api/podcast/interact` returns 501 |
-| Live research | NOT STARTED | Experience uses demo research path only |
-| Conversation memory | PARTIAL | In-memory sessions only; no Mastra memory |
+| Mastra agents and workflows | COMPLETE | `@mastra/core` + `mastra` installed; research/moderator agents, tools, interruption/resume workflows; Studio via `npm run mastra:dev` |
+| Moderator logic | COMPLETE | Gemini moderator plan (who answers + research need) in `interact.ts` |
+| Guest agent coordination | COMPLETE | Distinct guest reply turns from Gemini; targetGuestId supported |
+| User question handling | COMPLETE | `/api/podcast/interact` + Experience `beginInterrupt` (demo fallback) |
+| Live research | COMPLETE | Optional Bright Data via `fetchNewsForConfig` on interrupt; mock fallback |
+| Conversation memory | PARTIAL | In-memory sessions + interrupt side-store; no Mastra memory / Neon |
 
 ## Developer 2 — Frontend and Audio
 
@@ -109,9 +109,9 @@ Status key: `COMPLETE` | `PARTIAL` | `STUB` | `NOT STARTED`
 | Speaker visualization | COMPLETE | Active speaker / EQ treatment in Experience |
 | Live transcripts | COMPLETE | Timed transcript synced to TTS |
 | Microphone input | COMPLETE | Record → `/api/audio/transcribe` |
-| Interruption controls | PARTIAL | UI join/research flow works; backend still demo (not `/interact`) |
-| Guest addressing | PARTIAL | Panel highlights active speaker; no targeted address API yet |
-| Conversation experience | PARTIAL | Full listen loop live; interrupt path still scripted demo |
+| Interruption controls | COMPLETE | Research → live join lines from `/interact`; resume via `/resume` |
+| Guest addressing | PARTIAL | Panel highlights active speaker; `targetGuestId` on API, UI not wired yet |
+| Conversation experience | COMPLETE | Listen + interrupt + resume loop live (demo fallback if no session) |
 
 ## Shared responsibilities
 
@@ -119,7 +119,7 @@ Status key: `COMPLETE` | `PARTIAL` | `STUB` | `NOT STARTED`
 |------|--------|-------|
 | TypeScript interfaces | COMPLETE | `src/types/` |
 | API contracts | COMPLETE | Types locked; generate/next/audio implemented |
-| Frontend and backend integration | PARTIAL | Generate + TTS/STT wired; interact/resume still open |
+| Frontend and backend integration | COMPLETE | Generate + TTS/STT + interact/resume wired into Experience |
 | Vercel deployment | PARTIAL | Build verified locally; not yet imported/deployed on Vercel |
 | Testing | NOT STARTED | |
 | Hackathon presentation | NOT STARTED | |
@@ -135,7 +135,7 @@ Status key: `COMPLETE` | `PARTIAL` | `STUB` | `NOT STARTED`
 | Podcast configuration UI | COMPLETE (Experience setup) |
 | Duration and depth controls | COMPLETE |
 | Multiple customizable AI guests | PARTIAL (select demo guests; no freeform create yet) |
-| Mastra podcast generation workflow | NOT STARTED (MVP uses direct Gemini in `src/services/podcast/`) |
+| Mastra podcast generation workflow | PARTIAL (episode generate still direct Gemini; interrupt/resume registered as Mastra workflows) |
 | Multi-speaker ElevenLabs audio | COMPLETE (transcript-synced exclusive clips) |
 | Functional podcast player | COMPLETE (Experience) |
 | Basic source citations | COMPLETE (News Engine → Experience sources panel) |
@@ -144,10 +144,10 @@ Status key: `COMPLETE` | `PARTIAL` | `STUB` | `NOT STARTED`
 
 | Item | Status |
 |------|--------|
-| Real interrupt via `/api/podcast/interact` | NOT STARTED (501; UI uses demo research/join) |
-| Resume via `/api/podcast/resume` | NOT STARTED (501) |
-| Live research during interrupt | NOT STARTED |
-| Mastra moderator / guest agents | NOT STARTED |
+| Real interrupt via `/api/podcast/interact` | COMPLETE (Experience wired; demo fallback without session) |
+| Resume via `/api/podcast/resume` | COMPLETE |
+| Live research during interrupt | COMPLETE (Bright Data + mock fallback) |
+| Mastra moderator / guest agents | COMPLETE (moderator + research agents with tools; guest replies still via interact service) |
 
 # Core Features
 
@@ -855,12 +855,12 @@ Primary paths: `src/services/bright-data/`, `src/services/news/`, `src/services/
 
 ### Task 3: Agent System
 
-- Mastra agents and workflows. — STUB
-- Moderator logic. — NOT STARTED
-- Guest agent coordination. — NOT STARTED
-- User question handling. — STUB (501)
-- Live research. — NOT STARTED
-- Conversation memory. — PARTIAL (in-memory only)
+- Mastra agents and workflows. — COMPLETE (`@mastra/core`; Studio: `npm run mastra:dev`)
+- Moderator logic. — COMPLETE
+- Guest agent coordination. — COMPLETE
+- User question handling. — COMPLETE (`/interact`)
+- Live research. — COMPLETE (on interrupt)
+- Conversation memory. — PARTIAL (in-memory + interrupt store)
 
 ## Developer 2 — Frontend and Audio
 
@@ -887,15 +887,15 @@ Primary paths: `src/components/`, `src/app/` pages, `src/services/elevenlabs/`, 
 - Speaker visualization. — COMPLETE
 - Live transcripts. — COMPLETE (TTS-synced)
 - Microphone input. — COMPLETE (STT)
-- Interruption controls. — PARTIAL (UI demo; no `/interact` yet)
-- Guest addressing. — PARTIAL
-- Conversation experience. — PARTIAL (listen live; interrupt still scripted)
+- Interruption controls. — COMPLETE
+- Guest addressing. — PARTIAL (`targetGuestId` API only)
+- Conversation experience. — COMPLETE (listen + interrupt + resume)
 
 ## Shared Responsibilities
 
 - TypeScript interfaces. — COMPLETE
-- API contracts. — COMPLETE (generate/next/audio live; interact/resume stubbed)
-- Frontend and backend integration. — PARTIAL
+- API contracts. — COMPLETE (generate/next/audio/interact/resume live)
+- Frontend and backend integration. — COMPLETE
 - Vercel deployment. — PARTIAL (build verified locally)
 - Testing. — NOT STARTED
 - Hackathon presentation. — NOT STARTED

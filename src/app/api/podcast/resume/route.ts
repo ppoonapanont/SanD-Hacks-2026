@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
-import type { ResumeRequest } from "@/types";
+import { resumePodcastEpisode } from "@/services/podcast/resume";
+import type { ResumeRequest, ResumeResponse } from "@/types";
 
 /**
  * POST /api/podcast/resume
@@ -22,11 +23,20 @@ export async function POST(request: Request) {
     );
   }
 
-  return NextResponse.json(
-    {
-      error: "Podcast resume is not implemented yet",
-      code: "NOT_IMPLEMENTED",
-    },
-    { status: 501 },
-  );
+  try {
+    const result = await resumePodcastEpisode(body.sessionId);
+    const response: ResumeResponse = {
+      session: result.session,
+      turn: result.turn,
+    };
+    return NextResponse.json(response);
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "Podcast resume failed";
+    const status = message === "Podcast not found" ? 404 : 500;
+    return NextResponse.json(
+      { error: message, code: status === 404 ? "NOT_FOUND" : "RESUME_FAILED" },
+      { status },
+    );
+  }
 }

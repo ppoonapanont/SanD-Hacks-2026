@@ -1,13 +1,38 @@
+import { Mastra } from "@mastra/core";
+
+import { moderatorAgent } from "./agents/moderator-agent";
+import { researchAgent } from "./agents/research-agent";
+import {
+  interruptionWorkflow,
+  interruptionWorkflowMeta,
+  resumeWorkflow,
+  runInterruptionWorkflow,
+  runResumeWorkflow,
+} from "./workflows/interruption";
+
 /**
- * Mastra agent system entry — Developer 1.
- *
- * Planned agents: Research, Fact-Checking, Producer, Moderator, Guests
- * Planned workflows: preparation, conversation loop, user interruption
- *
- * Do not treat Mastra as a thin LLM wrapper — use tools, memory, and workflows.
+ * Mastra entry — agents + interruption workflows for Studio and server use.
+ * Experience HTTP routes continue to call `services/podcast` directly.
  */
+export const mastra = new Mastra({
+  agents: {
+    researchAgent,
+    moderatorAgent,
+  },
+  workflows: {
+    interruptionWorkflow,
+    resumeWorkflow,
+  },
+});
+
+export {
+  interruptionWorkflowMeta,
+  runInterruptionWorkflow,
+  runResumeWorkflow,
+};
 
 export const mastraStatus = {
-  configured: false,
-  note: "Mastra agents and workflows are not implemented yet",
+  configured: true,
+  packageInstalled: true,
+  note: "Mastra agents + interruption/resume workflows registered. Studio: npm run mastra:dev",
 } as const;

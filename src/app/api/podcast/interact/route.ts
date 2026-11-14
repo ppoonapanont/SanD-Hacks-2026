@@ -1,10 +1,11 @@
 import { NextResponse } from "next/server";
 
-import type { InteractRequest } from "@/types";
+import { handlePodcastInteraction } from "@/services/podcast/interact";
+import type { InteractRequest, InteractResponse } from "@/types";
 
 /**
  * POST /api/podcast/interact
- * Developer 1 — user interruption + dynamic guest responses (P1).
+ * Developer 1 — user interruption + research + guest responses (P1).
  */
 export async function POST(request: Request) {
   let body: InteractRequest;
@@ -22,11 +23,30 @@ export async function POST(request: Request) {
     );
   }
 
-  return NextResponse.json(
-    {
-      error: "Podcast interaction is not implemented yet",
-      code: "NOT_IMPLEMENTED",
-    },
-    { status: 501 },
-  );
+  try {
+    const result = await handlePodcastInteraction({
+      sessionId: body.sessionId,
+      message: body.message,
+      targetGuestId: body.targetGuestId,
+    });
+
+    const response: InteractResponse & {
+      usedMockResearch: boolean;
+      errors: string[];
+    } = {
+      session: result.session,
+      turns: result.turns,
+      usedMockResearch: result.usedMockResearch,
+      errors: result.errors,
+    };
+    return NextResponse.json(response);
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "Podcast interaction failed";
+    const status = message === "Podcast not found" ? 404 : 500;
+    return NextResponse.json(
+      { error: message, code: status === 404 ? "NOT_FOUND" : "INTERACT_FAILED" },
+      { status },
+    );
+  }
 }

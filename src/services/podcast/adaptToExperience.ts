@@ -1,4 +1,5 @@
 import type {
+  DemoJoinLine,
   DemoScriptLine,
   DemoSource,
   SpeakerCode,
@@ -104,4 +105,40 @@ function speakerCodeFor(
   if (index === 1) return "B";
   if (index >= 2) return "C";
   return "A";
+}
+
+/**
+ * Maps interrupt response turns (skip the user message) into Experience join lines.
+ * Citation numbers are remapped into the provided sources map when possible.
+ */
+export function adaptInteractTurnsToJoinLines(
+  turns: ConversationTurn[],
+  guestIds: string[],
+  sources: Record<number, DemoSource>,
+  sessionSources: NewsSource[],
+): DemoJoinLine[] {
+  const sourceIndexById = new Map<string, number>();
+  sessionSources.forEach((source, index) => {
+    sourceIndexById.set(source.id, index + 1);
+    if (!sources[index + 1]) {
+      sources[index + 1] = toDemoSource(source);
+    }
+  });
+
+  return turns
+    .filter((turn) => turn.speakerType !== "user")
+    .map((turn) => {
+      const text = turn.text?.trim();
+      if (!text) return null;
+      const c = (turn.sourceIds ?? [])
+        .map((id) => sourceIndexById.get(id))
+        .filter((n): n is number => typeof n === "number");
+      const line: DemoJoinLine = {
+        s: speakerCodeFor(turn, guestIds),
+        x: text,
+        ...(c.length ? { c } : {}),
+      };
+      return line;
+    })
+    .filter((line): line is DemoJoinLine => Boolean(line));
 }

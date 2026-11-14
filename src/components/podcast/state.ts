@@ -1,5 +1,6 @@
 import {
   DEMO_CHAPTER_TEMPLATES,
+  type DemoJoinLine,
   type DemoScriptLine,
   type DemoSource,
   type GuestKey,
@@ -35,6 +36,8 @@ export interface ExperienceState {
   sessionId: string | null;
   liveScript: DemoScriptLine[] | null;
   liveSources: Record<number, DemoSource> | null;
+  /** Live interrupt replies from /api/podcast/interact; null uses DEMO_JOIN_LINES. */
+  liveJoinLines: DemoJoinLine[] | null;
 }
 
 export const BASE_STATE: ExperienceState = {
@@ -61,6 +64,7 @@ export const BASE_STATE: ExperienceState = {
   sessionId: null,
   liveScript: null,
   liveSources: null,
+  liveJoinLines: null,
 };
 
 export interface Chapter {

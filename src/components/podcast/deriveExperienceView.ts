@@ -293,11 +293,12 @@ export function deriveExperienceView(state: ExperienceState): ExperienceView {
   });
   const curLine = tail.length ? tail[tail.length - 1].line : null;
 
-  const joinLines: TranscriptLineView[] = DEMO_JOIN_LINES.slice(0, state.joinN).map((l, j) =>
+  const joinScript = state.liveJoinLines ?? DEMO_JOIN_LINES;
+  const joinLines: TranscriptLineView[] = joinScript.slice(0, state.joinN).map((l, j) =>
     lineView(l, `J${j}`),
   );
-  const joinDone = mode === "joined" && state.joinN >= DEMO_JOIN_LINES.length;
-  const nextJoinLine = DEMO_JOIN_LINES[state.joinN];
+  const joinDone = mode === "joined" && state.joinN >= joinScript.length;
+  const nextJoinLine = joinScript[state.joinN];
 
   let activeId: string | null = null;
   if (mode === "listen" && state.playing && curLine) activeId = slot[curLine.s];
