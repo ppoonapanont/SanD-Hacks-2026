@@ -545,83 +545,60 @@ Prioritize a clean and intuitive experience.
 
 # Main Screens
 
-## 1. Home
+Keep the product to two screens. Judges and first-time users should reach the live demo in one click, with no page-hopping between setup, guests, sources, and history.
 
-- Generate today's podcast.
-- Continue a previous podcast.
-- View recent episodes.
-- Browse suggested topics.
-- Browse popular guest configurations.
+## 1. Home (Landing)
 
-## 2. Podcast Configuration
+Explains the product and gets the user into the experience immediately.
+
+- Headline and one-line pitch (e.g. "A podcast you're actually part of").
+- 2–3 highlight cards: pick your panel, tune depth and length, interrupt live.
+- Single primary "Try Now" call-to-action button.
+- Optional: small link/dropdown to reopen a previous episode (not a separate page).
+
+Design this to feel like a polished product landing page, not a developer tool.
+
+## 2. Experience Screen
+
+This is the entire rest of the product. Setup, generation, playback, interruption, sources, and chapters all happen here without navigating to another page.
+
+### Setup (collapsible, shown before generation)
 
 - Select news topics.
-- Select geographical region.
-- Select language.
+- Select geographical region and language.
 - Adjust podcast duration using a 2–30 minute slider.
 - Select discussion depth.
-- Select or customize guests.
+- Select or customize guests (simple preset panels plus basic customization for the MVP).
 - Generate podcast button.
 
-## 3. Guest Selection
+Once generated, the setup section collapses so the player becomes the main focus.
 
-- Browse predefined guest personas.
-- Search for guest inspiration.
-- Create custom guests.
-- Customize expertise and personality.
-- Select voice.
-- Preview guest voice when available.
-- Add or remove guests.
-- Display selected podcast panel.
+### Interactive Podcast Player
 
-Keep guest setup simple for the MVP.
-
-## 4. Interactive Podcast Player
-
-This is the primary product experience.
+The primary product experience.
 
 Display:
 
-- Podcast title
-- Episode description
-- Current discussion topic
-- Guest profiles and avatars
-- Active speaker
-- Playback progress
-- Audio visualization
-- Live transcript
-- Source citations
+- Podcast title and episode description.
+- Chapters: a marker rail under the progress bar representing each discussion topic/segment. Clicking a chapter jumps playback to that segment. Reuses the existing episode topic structure — no separate data model needed.
+- Current chapter/topic name, shown near the active speaker.
+- Guest profiles and avatars, with the active speaker visually highlighted.
+- Playback progress and audio visualization.
+- Live transcript, synced to the active speaker.
+- Source citations, shown as an inline strip or expandable panel (not a separate page) so research is visibly happening, especially during live interruptions.
 
 Controls:
 
-- Play and pause
-- Skip forward
-- Skip backward
-- Playback speed
-- Join conversation
-- Microphone input
-- Text input
-- Select which guest to address
-- Resume original podcast
+- Play and pause.
+- Skip forward and backward between chapters/turns.
+- Playback speed.
+- Join conversation (microphone or text input).
+- Select which guest to address.
+- Resume original podcast after interrupting.
 
-When a guest is speaking, visually highlight their profile.
+When the user interrupts and research is triggered, show a visible state (e.g. a "Researching..." indicator) so the live Mastra/Bright Data workflow is seen, not just inferred.
 
-When the user joins, make the transition from listening to participating obvious.
-
-## 5. Source Viewer
-
-- Display articles referenced during the podcast.
-- Include publisher and publication date.
-- Link to original articles.
-- Associate sources with relevant discussion turns.
-- Show conflicting reporting where appropriate.
-
-## 6. Podcast History
-
-- View previous episodes.
-- Reopen previous conversations.
-- Replay generated podcasts.
-- Reuse guest configurations.
+When the user joins, make the transition from listening to participating visually obvious, and make resuming back into the correct chapter feel seamless.
 
 # Design Principles
 
