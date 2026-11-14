@@ -1,5 +1,7 @@
 import {
   DEMO_CHAPTER_TEMPLATES,
+  type DemoScriptLine,
+  type DemoSource,
   type GuestKey,
 } from "@/data/mock/experience-demo";
 
@@ -29,6 +31,10 @@ export interface ExperienceState {
   noteK: number;
   question: string;
   found5: boolean;
+  /** Live episode from Dev 1 Podcast Generator; null keeps demo script. */
+  sessionId: string | null;
+  liveScript: DemoScriptLine[] | null;
+  liveSources: Record<number, DemoSource> | null;
 }
 
 export const BASE_STATE: ExperienceState = {
@@ -52,6 +58,9 @@ export const BASE_STATE: ExperienceState = {
   noteK: 0,
   question: "",
   found5: false,
+  sessionId: null,
+  liveScript: null,
+  liveSources: null,
 };
 
 export interface Chapter {

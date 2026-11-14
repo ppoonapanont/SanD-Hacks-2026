@@ -1,11 +1,12 @@
 import { NextResponse } from "next/server";
 
 import { validatePodcastConfig } from "@/lib/validation/podcast";
-import type { GeneratePodcastRequest } from "@/types";
+import { generatePodcastEpisode } from "@/services/podcast";
+import type { GeneratePodcastRequest, GeneratePodcastResponse } from "@/types";
 
 /**
  * POST /api/podcast/generate
- * Developer 1 — wire to News Engine + Mastra preparation workflow.
+ * Developer 1 — News Engine + Gemini episode script generation.
  */
 export async function POST(request: Request) {
   let body: GeneratePodcastRequest;
@@ -21,12 +22,23 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: validation.error }, { status: 400 });
   }
 
-  // Phase 0 stub — implementation lands with News Engine + Podcast Generator.
-  return NextResponse.json(
-    {
-      error: "Podcast generation is not implemented yet",
-      code: "NOT_IMPLEMENTED",
-    },
-    { status: 501 },
-  );
+  try {
+    const result = await generatePodcastEpisode(validation.config);
+    const response: GeneratePodcastResponse & {
+      usedMockNews: boolean;
+      errors: string[];
+    } = {
+      session: result.session,
+      usedMockNews: result.usedMockNews,
+      errors: result.errors,
+    };
+    return NextResponse.json(response);
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "Podcast generation failed";
+    return NextResponse.json(
+      { error: message, code: "GENERATE_FAILED" },
+      { status: 500 },
+    );
+  }
 }

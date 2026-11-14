@@ -227,15 +227,19 @@ export function deriveExperienceView(state: ExperienceState): ExperienceView {
     C: activeGuests[2 % activeGuests.length],
   };
 
-  function citeList(sources: number[] | undefined, key: string): CiteChipView[] {
-    return (sources ?? []).map((n) => {
+  const episodeScript = state.liveScript ?? DEMO_SCRIPT;
+  const episodeSources = state.liveSources ?? DEMO_SOURCES;
+
+  function citeList(sourceNums: number[] | undefined, key: string): CiteChipView[] {
+    return (sourceNums ?? []).map((n) => {
       const id = `${key}:${n}`;
       const open = state.openCite === id;
+      const source = episodeSources[n];
       return {
         id,
         n,
         open,
-        aria: `Source ${n}: ${DEMO_SOURCES[n].title}`,
+        aria: `Source ${n}: ${source?.title ?? "Source"}`,
         bg: open ? "#97acc8" : theme.chip,
         fg: open ? "#051230" : theme.accentText,
       };
@@ -263,13 +267,13 @@ export function deriveExperienceView(state: ExperienceState): ExperienceView {
       opacity: 1,
       fontSize: 16,
       cites,
-      openSource: openNum ? DEMO_SOURCES[openNum] : null,
+      openSource: openNum ? episodeSources[openNum] ?? null : null,
       ...extra,
     };
   }
 
-  const shown: { line: (typeof DEMO_SCRIPT)[number]; idx: number }[] = [];
-  DEMO_SCRIPT.forEach((l, idx) => {
+  const shown: { line: (typeof episodeScript)[number]; idx: number }[] = [];
+  episodeScript.forEach((l, idx) => {
     if (l.t * sc <= state.t + 0.001) shown.push({ line: l, idx });
   });
   const tail = shown.slice(-5);
@@ -406,21 +410,30 @@ export function deriveExperienceView(state: ExperienceState): ExperienceView {
   const cited = new Set<number>();
   const citeSource = mode === "joined" ? DEMO_JOIN_LINES.slice(0, state.joinN) : curLine ? [curLine] : [];
   citeSource.forEach((l) => (l.c ?? []).forEach((n) => cited.add(n)));
-  const sourceIds = [1, 2, 3, 4, ...(state.found5 ? [5] : [])];
-  const sourceList: SourceCardView[] = sourceIds.map((n) => {
-    const src = DEMO_SOURCES[n];
+  const liveSourceIds = Object.keys(episodeSources)
+    .map((key) => Number(key))
+    .filter((n) => Number.isFinite(n))
+    .sort((a, b) => a - b);
+  const sourceIds = state.liveSources
+    ? liveSourceIds
+    : [1, 2, 3, 4, ...(state.found5 ? [5] : [])];
+  const sourceList: SourceCardView[] = sourceIds.flatMap((n) => {
+    const src = episodeSources[n];
+    if (!src) return [];
     const isCited = cited.has(n);
-    return {
-      n,
-      title: src.title,
-      outlet: src.outlet,
-      date: src.date,
-      note: src.note,
-      isLive: n === 5,
-      cited: isCited,
-      border: isCited ? "#97acc8" : "rgba(182,191,193,0.14)",
-      background: isCited ? "rgba(151,172,200,0.10)" : "transparent",
-    };
+    return [
+      {
+        n,
+        title: src.title,
+        outlet: src.outlet,
+        date: src.date,
+        note: src.note,
+        isLive: !state.liveSources && n === 5,
+        cited: isCited,
+        border: isCited ? "#97acc8" : "rgba(182,191,193,0.14)",
+        background: isCited ? "rgba(151,172,200,0.10)" : "transparent",
+      },
+    ];
   });
 
   const waveDelays = Array.from({ length: 28 }, (_, w) => ((w * 37) % 100) / 100);

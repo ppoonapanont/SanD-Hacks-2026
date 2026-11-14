@@ -4,9 +4,21 @@ import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 
 import { EpisodeSetup } from "@/components/configuration/EpisodeSetup";
-import { DEMO_JOIN_LINES, DEMO_VOICE_QUESTION, type GuestKey } from "@/data/mock/experience-demo";
+import {
+  DEMO_GUESTS,
+  DEMO_JOIN_LINES,
+  DEMO_SCRIPT,
+  DEMO_SOURCES,
+  DEMO_VOICE_QUESTION,
+  HOST_PROFILE,
+  type DemoScriptLine,
+  type GuestKey,
+  type SpeakerCode,
+} from "@/data/mock/experience-demo";
 import { useTurnAudio } from "@/hooks";
-import { transcribeAudio } from "@/lib/api/client";
+import { generatePodcast, transcribeAudio } from "@/lib/api/client";
+import { adaptSessionToExperience } from "@/services/podcast/adaptToExperience";
+import { buildPodcastConfig } from "@/services/podcast/guestMap";
 import { formatSeconds } from "@/utils/time";
 
 import { ChaptersPanel } from "./ChaptersPanel";
@@ -23,6 +35,59 @@ import {
 } from "./state";
 
 const TICK_MS = 250;
+/** If TTS never returns / never ends, still move the transcript forward. */
+const LISTEN_STALL_MS = 18_000;
+
+function profileForGuestSlot(guests: GuestKey[], code: SpeakerCode) {
+  const active = guests.length ? guests : (["ada"] as GuestKey[]);
+  const slot: Record<SpeakerCode, string> = {
+    H: "host",
+    A: active[0],
+    B: active[1 % active.length],
+    C: active[2 % active.length],
+  };
+  const id = slot[code];
+  if (id === "host") return HOST_PROFILE;
+  return DEMO_GUESTS[id as GuestKey] ?? HOST_PROFILE;
+}
+
+function scaleT(lineT: number, durationMinutes: number) {
+  return lineT * ((durationMinutes * 60) / 720);
+}
+
+function activeScriptIndex(
+  script: DemoScriptLine[],
+  t: number,
+  durationMinutes: number,
+): number {
+  let best = -1;
+  for (let i = 0; i < script.length; i++) {
+    if (scaleT(script[i].t, durationMinutes) <= t + 0.001) best = i;
+  }
+  return best;
+}
+
+function advanceListenPastTurn(
+  prev: ExperienceState,
+  turnId: string,
+): ExperienceState {
+  if (prev.phase !== "episode" || prev.mode !== "listen") return prev;
+  const match = /^L(\d+)$/.exec(turnId);
+  if (!match) return prev;
+
+  const idx = Number(match[1]);
+  const script = prev.liveScript ?? DEMO_SCRIPT;
+  if (!script[idx]) return prev;
+
+  // Ignore stale callbacks from a line we've already left.
+  if (activeScriptIndex(script, prev.t, prev.duration) !== idx) return prev;
+
+  const next = script[idx + 1];
+  if (!next) {
+    return { ...prev, t: prev.duration * 60, playing: false };
+  }
+  return { ...prev, t: scaleT(next.t, prev.duration) };
+}
 
 /**
  * The entire interactive Experience screen: collapsible setup, player, chapters,
@@ -40,14 +105,11 @@ export function Experience() {
     const id = setInterval(() => {
       setState((prev) => {
         if (prev.phase === "generating") {
-          if (prev.k + 1 >= 12) {
-            return { ...prev, phase: "episode", setupOpen: false, playing: true, t: 0, k: 0, mode: "listen" };
-          }
-          return { ...prev, k: prev.k + 1 };
+          // Keep the generating animation looping until the API finishes.
+          return { ...prev, k: (prev.k + 1) % 12 };
         }
         if (prev.phase !== "episode") return prev;
 
-        const total = prev.duration * 60;
         const patch: Partial<ExperienceState> = {};
         if (prev.note) {
           const noteK = prev.noteK + 1;
@@ -55,15 +117,11 @@ export function Experience() {
           if (noteK > 24) patch.note = "";
         }
 
+        // Listen mode: do NOT free-run the fake clock. The transcript advances
+        // when each ElevenLabs clip ends (or TTS fails) so guest voices aren't
+        // skipped while Mira's audio is still playing / still generating.
         if (prev.mode === "listen" && prev.playing) {
-          let nt = prev.t + total / 720;
-          let playing: boolean = prev.playing;
-          if (nt >= total) {
-            nt = total;
-            playing = false;
-          }
-          patch.t = nt;
-          patch.playing = playing;
+          // no-op for t — see advanceListenPastTurn
         } else if (prev.mode === "research" && prev.playing) {
           const k = prev.k + 1;
           const step = Math.floor(k / 5);
@@ -89,12 +147,24 @@ export function Experience() {
     return () => clearInterval(id);
   }, []);
 
+  // Sync transcript → next speaker when the *active* line's clip finishes or TTS fails.
+  useEffect(() => {
+    const advance = (turnId: string) => {
+      setState((prev) => advanceListenPastTurn(prev, turnId));
+    };
+    turnAudio.setOnClipEnded(advance);
+    turnAudio.setOnSpeakFailed(advance);
+    return () => {
+      turnAudio.setOnClipEnded(null);
+      turnAudio.setOnSpeakFailed(null);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const view = deriveExperienceView(state);
 
-  // Generate and play real ElevenLabs audio for whichever line is currently
-  // "speaking" in the (simulated) timeline. Speech is best-effort: if ElevenLabs
-  // isn't configured or a request fails, this stays silent and the visual
-  // transcript keeps advancing on its own regardless.
+  // Speak exactly the highlighted transcript line. Clip-end advances the line;
+  // speak() plays that line exclusively so audio cannot drift ahead/behind the UI.
   const isSpeakingPhase = view.isEpisode && (state.mode === "listen" || state.mode === "joined");
   const activeLine = !isSpeakingPhase
     ? null
@@ -117,14 +187,45 @@ export function Experience() {
         speakerId: activeLine.key,
         speakerName: activeLine.name,
       });
-    } else {
+    } else if (turnAudio.current?.turnId === activeLineKey) {
       turnAudio.play();
     }
-    // turnAudio's methods are stable in spirit (new hook-return object each
-    // render, same underlying behavior) — only the actual signal values below
-    // should re-trigger this effect.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isSpeakingPhase, state.mode, state.playing, activeLineKey]);
+
+  // Prefetch the next couple of listen-mode lines so guest audio is ready
+  // before Mira's clip finishes.
+  useEffect(() => {
+    if (!view.isEpisode || state.mode !== "listen" || !state.playing) return;
+    const match = /^L(\d+)$/.exec(activeLineKey ?? "");
+    if (!match) return;
+    const idx = Number(match[1]);
+    const script: DemoScriptLine[] = state.liveScript ?? DEMO_SCRIPT;
+    for (const i of [idx + 1, idx + 2]) {
+      const line = script[i];
+      if (!line) continue;
+      const profile = profileForGuestSlot(state.guests, line.s);
+      turnAudio.prefetch({
+        turnId: `L${i}`,
+        text: line.x,
+        voiceId: profile.voiceId,
+        speakerId: `L${i}`,
+        speakerName: profile.name,
+      });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeLineKey, state.mode, state.playing, state.liveScript, state.guests, view.isEpisode]);
+
+  // Stall fallback: only if TTS never starts for this line (not while audio plays).
+  useEffect(() => {
+    if (state.mode !== "listen" || !state.playing || !activeLineKey) return;
+    if (turnAudio.current?.turnId === activeLineKey) return;
+    const turnId = activeLineKey;
+    const timer = window.setTimeout(() => {
+      setState((prev) => advanceListenPastTurn(prev, turnId));
+    }, LISTEN_STALL_MS);
+    return () => window.clearTimeout(timer);
+  }, [activeLineKey, state.mode, state.playing, turnAudio.current?.turnId]);
 
   const handlers: ExperienceHandlers = {
     toggleSetup: () => setState((prev) => ({ ...prev, setupOpen: !prev.setupOpen })),
@@ -149,19 +250,81 @@ export function Experience() {
       if (!state.guests.length) return;
       turnAudio.clear();
       lastSpokenKeyRef.current = null;
-      setState((prev) => ({
-        ...prev,
-        phase: "generating",
-        setupOpen: false,
-        k: 0,
-        t: 0,
-        mode: "listen",
-        playing: false,
-        joinN: 0,
-        found5: false,
-        openCite: null,
-        note: "",
-      }));
+
+      setState((prev) => {
+        const snapshot = prev;
+        void (async () => {
+          try {
+            const config = buildPodcastConfig({
+              topics: snapshot.topics,
+              region: snapshot.region,
+              language: snapshot.language,
+              durationMinutes: snapshot.duration,
+              depthLabel: snapshot.depth,
+              guestKeys: snapshot.guests,
+            });
+            const { session } = await generatePodcast({ config });
+            const adapted = adaptSessionToExperience(session);
+            setState((current) => ({
+              ...current,
+              phase: "episode",
+              setupOpen: false,
+              playing: true,
+              t: 0,
+              k: 0,
+              mode: "listen",
+              joinN: 0,
+              found5: false,
+              openCite: null,
+              sessionId: adapted.sessionId,
+              liveScript: adapted.script,
+              liveSources: adapted.sources,
+              note: adapted.usedMockNews
+                ? "Generated with mock/fallback news — sources labeled in notes"
+                : `Generated: ${adapted.title}`,
+              noteK: 0,
+            }));
+          } catch (error) {
+            const message =
+              error instanceof Error ? error.message : "Generation failed";
+            setState((current) => ({
+              ...current,
+              phase: "episode",
+              setupOpen: false,
+              playing: true,
+              t: 0,
+              k: 0,
+              mode: "listen",
+              joinN: 0,
+              found5: false,
+              openCite: null,
+              sessionId: null,
+              liveScript: DEMO_SCRIPT,
+              liveSources: DEMO_SOURCES,
+              note: `API unavailable (${message}). Playing demo script.`,
+              noteK: 0,
+            }));
+          }
+        })();
+
+        return {
+          ...prev,
+          phase: "generating",
+          setupOpen: false,
+          k: 0,
+          t: 0,
+          mode: "listen",
+          playing: false,
+          joinN: 0,
+          found5: false,
+          openCite: null,
+          note: "Pulling news and writing the panel script…",
+          noteK: 0,
+          sessionId: null,
+          liveScript: null,
+          liveSources: null,
+        };
+      });
     },
     seekTo: (seconds) => setState((prev) => ({ ...prev, t: seconds + 0.01, openCite: null })),
     seekFraction: (fraction) =>

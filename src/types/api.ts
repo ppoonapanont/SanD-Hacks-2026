@@ -16,6 +16,8 @@ export interface GeneratePodcastRequest {
 
 export interface GeneratePodcastResponse {
   session: PodcastSession;
+  usedMockNews?: boolean;
+  errors?: string[];
 }
 
 /** POST /api/podcast/next */

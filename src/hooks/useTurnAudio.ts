@@ -17,60 +17,117 @@ export interface SpeakableLine {
 
 /**
  * Generates ElevenLabs audio for a conversation turn (via POST /api/audio/generate)
- * and queues it for playback. Turns are cached by turnId so re-speaking the same
- * line (e.g. a repeated interruption) replays instantly instead of re-generating.
+ * and plays it exclusively so the audible clip always matches the active transcript line.
  *
- * Generation failures (no API key configured, request error) are swallowed —
- * the transcript keeps advancing silently rather than breaking the demo.
+ * Late TTS responses for a previous line are dropped (generation token).
+ * Prefetch only warms the cache — it never starts playback.
  */
 export function useTurnAudio() {
   const audioQueue = useAudioQueue();
   const cacheRef = useRef<Map<string, string>>(new Map());
   const pendingRef = useRef<Set<string>>(new Set());
+  const onSpeakFailedRef = useRef<((turnId: string) => void) | null>(null);
+  /** Only the latest speak() call may start playback. */
+  const speakGenerationRef = useRef(0);
+  const desiredTurnRef = useRef<string | null>(null);
+
+  const generateAndCache = useCallback(async (line: SpeakableLine): Promise<string | null> => {
+    const cached = cacheRef.current.get(line.turnId);
+    if (cached) return cached;
+    if (!line.voiceId?.trim() || !line.text?.trim()) return null;
+
+    if (pendingRef.current.has(line.turnId)) {
+      for (let i = 0; i < 40; i++) {
+        await new Promise((r) => setTimeout(r, 250));
+        const ready = cacheRef.current.get(line.turnId);
+        if (ready) return ready;
+        if (!pendingRef.current.has(line.turnId)) break;
+      }
+      return cacheRef.current.get(line.turnId) ?? null;
+    }
+
+    pendingRef.current.add(line.turnId);
+    try {
+      const response = await generateAudio({
+        text: line.text,
+        voiceId: line.voiceId,
+        turnId: line.turnId,
+      });
+      cacheRef.current.set(line.turnId, response.audioUrl);
+      return response.audioUrl;
+    } catch (error: unknown) {
+      console.warn(`[useTurnAudio] audio generation skipped for "${line.turnId}":`, error);
+      return null;
+    } finally {
+      pendingRef.current.delete(line.turnId);
+    }
+  }, []);
 
   const speak = useCallback(
     (line: SpeakableLine) => {
-      const cached = cacheRef.current.get(line.turnId);
-      if (cached) {
-        audioQueue.enqueue({
+      const generation = ++speakGenerationRef.current;
+      desiredTurnRef.current = line.turnId;
+
+      void generateAndCache(line).then((audioUrl) => {
+        // A newer speak() won, or the UI moved on — drop this result.
+        if (generation !== speakGenerationRef.current) return;
+        if (desiredTurnRef.current !== line.turnId) return;
+
+        if (!audioUrl) {
+          onSpeakFailedRef.current?.(line.turnId);
+          return;
+        }
+
+        const item: AudioQueueItem = {
           turnId: line.turnId,
-          audioUrl: cached,
+          audioUrl,
           speakerId: line.speakerId,
           speakerName: line.speakerName,
-        });
-        audioQueue.play();
-        return;
-      }
-      if (pendingRef.current.has(line.turnId)) return;
-      pendingRef.current.add(line.turnId);
-
-      void generateAudio({ text: line.text, voiceId: line.voiceId, turnId: line.turnId })
-        .then((response) => {
-          cacheRef.current.set(line.turnId, response.audioUrl);
-          const item: AudioQueueItem = {
-            turnId: line.turnId,
-            audioUrl: response.audioUrl,
-            speakerId: line.speakerId,
-            speakerName: line.speakerName,
-          };
-          audioQueue.enqueue(item);
-          audioQueue.play();
-        })
-        .catch((error: unknown) => {
-          console.warn(`[useTurnAudio] audio generation skipped for "${line.turnId}":`, error);
-        })
-        .finally(() => {
-          pendingRef.current.delete(line.turnId);
-        });
+        };
+        audioQueue.playExclusive(item);
+      });
     },
-    [audioQueue],
+    [audioQueue, generateAndCache],
+  );
+
+  /** Warm the cache for upcoming lines without starting playback. */
+  const prefetch = useCallback(
+    (line: SpeakableLine) => {
+      void generateAndCache(line);
+    },
+    [generateAndCache],
   );
 
   const clear = useCallback(() => {
+    speakGenerationRef.current += 1;
+    desiredTurnRef.current = null;
     audioQueue.clear();
     cacheRef.current.clear();
     pendingRef.current.clear();
   }, [audioQueue]);
 
-  return { ...audioQueue, speak, clear };
+  const setOnSpeakFailed = useCallback((cb: ((turnId: string) => void) | null) => {
+    onSpeakFailedRef.current = cb;
+  }, []);
+
+  const setOnClipEnded = useCallback((cb: ((turnId: string) => void) | null) => {
+    if (!cb) {
+      audioQueue.setOnClipEnded(null);
+      return;
+    }
+    audioQueue.setOnClipEnded((turnId) => {
+      // Only the line we intentionally started may advance the transcript.
+      if (desiredTurnRef.current !== turnId) return;
+      cb(turnId);
+    });
+  }, [audioQueue]);
+
+  return {
+    ...audioQueue,
+    speak,
+    prefetch,
+    clear,
+    setOnSpeakFailed,
+    setOnClipEnded,
+  };
 }
