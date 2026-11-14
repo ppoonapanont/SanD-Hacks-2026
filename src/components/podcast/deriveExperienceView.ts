@@ -79,6 +79,7 @@ export interface TranscriptLineView {
   color: string;
   radius: string;
   initials: string;
+  voiceId: string;
   nameColor: string;
   text: string;
   time?: string;
@@ -254,6 +255,7 @@ export function deriveExperienceView(state: ExperienceState): ExperienceView {
       color: p.color,
       radius: p.radius,
       initials: p.initials,
+      voiceId: p.voiceId,
       nameColor: isLight ? theme.ink : p.color,
       text: l.x,
       opacity: 1,

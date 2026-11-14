@@ -1,11 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { EpisodeSetup } from "@/components/configuration/EpisodeSetup";
 import { DEMO_JOIN_LINES, DEMO_VOICE_QUESTION, type GuestKey } from "@/data/mock/experience-demo";
-
+import { useTurnAudio } from "@/hooks";
 import { formatSeconds } from "@/utils/time";
 
 import { ChaptersPanel } from "./ChaptersPanel";
@@ -29,6 +29,8 @@ const TICK_MS = 250;
  */
 export function Experience() {
   const [state, setState] = useState<ExperienceState>(BASE_STATE);
+  const turnAudio = useTurnAudio();
+  const lastSpokenKeyRef = useRef<string | null>(null);
 
   useEffect(() => {
     const id = setInterval(() => {
@@ -90,6 +92,41 @@ export function Experience() {
 
   const view = deriveExperienceView(state);
 
+  // Generate and play real ElevenLabs audio for whichever line is currently
+  // "speaking" in the (simulated) timeline. Speech is best-effort: if ElevenLabs
+  // isn't configured or a request fails, this stays silent and the visual
+  // transcript keeps advancing on its own regardless.
+  const isSpeakingPhase = view.isEpisode && (state.mode === "listen" || state.mode === "joined");
+  const activeLine = !isSpeakingPhase
+    ? null
+    : state.mode === "joined"
+      ? view.joinLines[view.joinLines.length - 1] ?? null
+      : view.lines[view.lines.length - 1] ?? null;
+  const activeLineKey = activeLine?.key ?? null;
+
+  useEffect(() => {
+    if (!isSpeakingPhase || (state.mode === "listen" && !state.playing)) {
+      turnAudio.pause();
+      return;
+    }
+    if (activeLine && activeLineKey !== lastSpokenKeyRef.current) {
+      lastSpokenKeyRef.current = activeLineKey;
+      turnAudio.speak({
+        turnId: activeLine.key,
+        text: activeLine.text,
+        voiceId: activeLine.voiceId,
+        speakerId: activeLine.key,
+        speakerName: activeLine.name,
+      });
+    } else {
+      turnAudio.play();
+    }
+    // turnAudio's methods are stable in spirit (new hook-return object each
+    // render, same underlying behavior) — only the actual signal values below
+    // should re-trigger this effect.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isSpeakingPhase, state.mode, state.playing, activeLineKey]);
+
   const handlers: ExperienceHandlers = {
     toggleSetup: () => setState((prev) => ({ ...prev, setupOpen: !prev.setupOpen })),
     setRegion: (value) => setState((prev) => ({ ...prev, region: value })),
@@ -109,24 +146,24 @@ export function Experience() {
         if (prev.guests.length < 3) return { ...prev, guests: [...prev.guests, id] };
         return prev;
       }),
-    generate: () =>
-      setState((prev) =>
-        prev.guests.length
-          ? {
-              ...prev,
-              phase: "generating",
-              setupOpen: false,
-              k: 0,
-              t: 0,
-              mode: "listen",
-              playing: false,
-              joinN: 0,
-              found5: false,
-              openCite: null,
-              note: "",
-            }
-          : prev,
-      ),
+    generate: () => {
+      if (!state.guests.length) return;
+      turnAudio.clear();
+      lastSpokenKeyRef.current = null;
+      setState((prev) => ({
+        ...prev,
+        phase: "generating",
+        setupOpen: false,
+        k: 0,
+        t: 0,
+        mode: "listen",
+        playing: false,
+        joinN: 0,
+        found5: false,
+        openCite: null,
+        note: "",
+      }));
+    },
     seekTo: (seconds) => setState((prev) => ({ ...prev, t: seconds + 0.01, openCite: null })),
     seekFraction: (fraction) =>
       setState((prev) => ({ ...prev, t: fraction * prev.duration * 60, openCite: null })),

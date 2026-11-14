@@ -19,6 +19,8 @@ export interface DemoGuestProfile {
   color: string;
   radius: string;
   initials: string;
+  /** ElevenLabs voice ID — replace with a real voice once one is picked for this persona. */
+  voiceId: string;
 }
 
 export const HOST_PROFILE = {
@@ -30,6 +32,7 @@ export const HOST_PROFILE = {
   color: "#97acc8",
   radius: "50%",
   initials: "Mi",
+  voiceId: "PLACEHOLDER_VOICE_MIRA",
 };
 
 export const DEMO_GUESTS: Record<GuestKey, DemoGuestProfile> = {
@@ -42,6 +45,7 @@ export const DEMO_GUESTS: Record<GuestKey, DemoGuestProfile> = {
     color: "#e3b98a",
     radius: "16px",
     initials: "AL",
+    voiceId: "PLACEHOLDER_VOICE_ADA",
   },
   theo: {
     id: "theo",
@@ -52,6 +56,7 @@ export const DEMO_GUESTS: Record<GuestKey, DemoGuestProfile> = {
     color: "#8fcaa8",
     radius: "50% 50% 50% 12px",
     initials: "TO",
+    voiceId: "PLACEHOLDER_VOICE_THEO",
   },
   wren: {
     id: "wren",
@@ -62,6 +67,7 @@ export const DEMO_GUESTS: Record<GuestKey, DemoGuestProfile> = {
     color: "#e29fb0",
     radius: "12px 50% 12px 50%",
     initials: "WH",
+    voiceId: "PLACEHOLDER_VOICE_WREN",
   },
   sol: {
     id: "sol",
@@ -72,6 +78,7 @@ export const DEMO_GUESTS: Record<GuestKey, DemoGuestProfile> = {
     color: "#b6a6e6",
     radius: "50% 50% 12px 12px",
     initials: "SR",
+    voiceId: "PLACEHOLDER_VOICE_SOL",
   },
   kai: {
     id: "kai",
@@ -82,6 +89,7 @@ export const DEMO_GUESTS: Record<GuestKey, DemoGuestProfile> = {
     color: "#e8d27a",
     radius: "6px",
     initials: "KM",
+    voiceId: "PLACEHOLDER_VOICE_KAI",
   },
 };
 
