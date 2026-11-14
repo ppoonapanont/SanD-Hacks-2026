@@ -166,6 +166,8 @@ export interface ExperienceView {
   playAriaLabel: string;
   controlsDisabled: boolean;
   controlsOpacity: number;
+  playPauseDisabled: boolean;
+  playPauseOpacity: number;
   progressPct: number;
   timeLabel: string;
   pausedLabel: string;
@@ -331,7 +333,12 @@ export function deriveExperienceView(state: ExperienceState): ExperienceView {
     });
   }
 
+  // Seeking/skipping chapters only makes sense while listening to the main episode.
   const controlsDisabled = !isEpisode || mode !== "listen";
+  // Play/pause stays available through research/joined too — a live interruption
+  // response should be pausable just like the episode itself, only recording
+  // (voice mode) blocks it since there's nothing to pause there.
+  const playPauseDisabled = !isEpisode || mode === "voice";
   const rail: RailItemView[] = chapters.map((c) => {
     const past = state.t >= c.e;
     const active = c.num === curCh.num;
@@ -436,11 +443,13 @@ export function deriveExperienceView(state: ExperienceState): ExperienceView {
     showLines: mode === "listen" || mode === "voice",
     showQuestion: mode === "research" || mode === "joined",
     showComposer: mode === "listen" || mode === "joined",
-    playing: state.playing && mode === "listen",
-    paused: !(state.playing && mode === "listen"),
+    playing: state.playing,
+    paused: !state.playing,
     playAriaLabel: state.playing ? "Pause" : "Play",
     controlsDisabled,
     controlsOpacity: controlsDisabled ? 0.4 : 1,
+    playPauseDisabled,
+    playPauseOpacity: playPauseDisabled ? 0.4 : 1,
     progressPct: Math.min(100, (state.t / total) * 100),
     timeLabel: `${formatSeconds(state.t)} / ${formatSeconds(total)}`,
     pausedLabel: formatSeconds(state.t),

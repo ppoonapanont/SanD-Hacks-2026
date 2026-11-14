@@ -6,6 +6,7 @@ import { useEffect, useRef, useState } from "react";
 import { EpisodeSetup } from "@/components/configuration/EpisodeSetup";
 import { DEMO_JOIN_LINES, DEMO_VOICE_QUESTION, type GuestKey } from "@/data/mock/experience-demo";
 import { useTurnAudio } from "@/hooks";
+import { transcribeAudio } from "@/lib/api/client";
 import { formatSeconds } from "@/utils/time";
 
 import { ChaptersPanel } from "./ChaptersPanel";
@@ -31,6 +32,9 @@ export function Experience() {
   const [state, setState] = useState<ExperienceState>(BASE_STATE);
   const turnAudio = useTurnAudio();
   const lastSpokenKeyRef = useRef<string | null>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const mediaStreamRef = useRef<MediaStream | null>(null);
+  const audioChunksRef = useRef<BlobPart[]>([]);
 
   useEffect(() => {
     const id = setInterval(() => {
@@ -60,12 +64,7 @@ export function Experience() {
           }
           patch.t = nt;
           patch.playing = playing;
-        } else if (prev.mode === "voice") {
-          if (prev.k + 1 >= 12) {
-            return { ...prev, ...patch, ...startResearchPatch(DEMO_VOICE_QUESTION) };
-          }
-          patch.k = prev.k + 1;
-        } else if (prev.mode === "research") {
+        } else if (prev.mode === "research" && prev.playing) {
           const k = prev.k + 1;
           const step = Math.floor(k / 5);
           patch.k = k;
@@ -76,7 +75,7 @@ export function Experience() {
             patch.joinN = 1;
             patch.k = 0;
           }
-        } else if (prev.mode === "joined" && prev.joinN < DEMO_JOIN_LINES.length) {
+        } else if (prev.mode === "joined" && prev.playing && prev.joinN < DEMO_JOIN_LINES.length) {
           if (prev.k + 1 >= 8) {
             patch.joinN = prev.joinN + 1;
             patch.k = 0;
@@ -105,7 +104,7 @@ export function Experience() {
   const activeLineKey = activeLine?.key ?? null;
 
   useEffect(() => {
-    if (!isSpeakingPhase || (state.mode === "listen" && !state.playing)) {
+    if (!isSpeakingPhase || !state.playing) {
       turnAudio.pause();
       return;
     }
@@ -181,8 +180,67 @@ export function Experience() {
         const q = prev.draft.trim();
         return q ? { ...prev, ...startResearchPatch(q) } : prev;
       }),
-    startVoice: () => setState((prev) => ({ ...prev, mode: "voice", k: 0, playing: false, openCite: null, note: "" })),
-    cancelVoice: () => setState((prev) => ({ ...prev, mode: "listen", playing: true, k: 0 })),
+    startVoice: () => {
+      setState((prev) => ({ ...prev, mode: "voice", k: 0, playing: false, openCite: null, note: "" }));
+      void (async () => {
+        try {
+          const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+          mediaStreamRef.current = stream;
+          audioChunksRef.current = [];
+          const recorder = new MediaRecorder(stream);
+          recorder.ondataavailable = (e) => {
+            if (e.data.size > 0) audioChunksRef.current.push(e.data);
+          };
+          recorder.start();
+          mediaRecorderRef.current = recorder;
+        } catch (error) {
+          // No mic permission/hardware — stopVoiceAndSubmit falls back to a
+          // scripted question so the demo still works without a microphone.
+          console.warn("[Experience] microphone unavailable:", error);
+          mediaRecorderRef.current = null;
+        }
+      })();
+    },
+    stopVoiceAndSubmit: () => {
+      const recorder = mediaRecorderRef.current;
+      if (!recorder) {
+        setState((prev) => ({ ...prev, ...startResearchPatch(DEMO_VOICE_QUESTION) }));
+        return;
+      }
+      mediaRecorderRef.current = null;
+      recorder.onstop = () => {
+        void (async () => {
+          mediaStreamRef.current?.getTracks().forEach((track) => track.stop());
+          mediaStreamRef.current = null;
+          const blob = new Blob(audioChunksRef.current, { type: recorder.mimeType || "audio/webm" });
+          audioChunksRef.current = [];
+
+          let text = "";
+          try {
+            const form = new FormData();
+            form.append("audio", blob, "interruption.webm");
+            const response = await transcribeAudio(form);
+            text = response.text.trim();
+          } catch (error) {
+            console.warn("[Experience] transcription failed, falling back to scripted question:", error);
+          }
+          setState((prev) => ({ ...prev, ...startResearchPatch(text || DEMO_VOICE_QUESTION) }));
+        })();
+      };
+      recorder.stop();
+    },
+    cancelVoice: () => {
+      const recorder = mediaRecorderRef.current;
+      if (recorder) {
+        recorder.onstop = null;
+        if (recorder.state !== "inactive") recorder.stop();
+      }
+      mediaStreamRef.current?.getTracks().forEach((track) => track.stop());
+      mediaStreamRef.current = null;
+      mediaRecorderRef.current = null;
+      audioChunksRef.current = [];
+      setState((prev) => ({ ...prev, mode: "listen", playing: true, k: 0 }));
+    },
     resume: () =>
       setState((prev) => {
         const chapters = getChapters(prev.duration);

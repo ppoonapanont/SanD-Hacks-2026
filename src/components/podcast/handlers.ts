@@ -20,6 +20,7 @@ export interface ExperienceHandlers {
   setDraft: (value: string) => void;
   submit: () => void;
   startVoice: () => void;
+  stopVoiceAndSubmit: () => void;
   cancelVoice: () => void;
   resume: () => void;
   pickSuggestion: (suggestion: SuggestionView) => void;

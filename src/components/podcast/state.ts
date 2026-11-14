@@ -79,11 +79,15 @@ export function currentChapter(chapters: Chapter[], t: number): Chapter {
   return chapters[chapters.length - 1];
 }
 
-/** The patch applied whenever a dynamic research/interruption flow starts. */
+/**
+ * The patch applied whenever a dynamic research/interruption flow starts.
+ * `playing: true` so research/joined auto-advance by default — the user can
+ * still pause it with the transport's play/pause button, same as the main episode.
+ */
 export function startResearchPatch(question: string): Partial<ExperienceState> {
   return {
     mode: "research",
-    playing: false,
+    playing: true,
     question,
     k: 0,
     step: 0,

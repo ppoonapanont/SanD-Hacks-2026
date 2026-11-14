@@ -220,7 +220,7 @@ export function PlayerCard({ view, handlers }: PlayerCardProps) {
               <button
                 type="button"
                 onClick={handlers.togglePlay}
-                disabled={view.controlsDisabled}
+                disabled={view.playPauseDisabled}
                 aria-label={view.playAriaLabel}
                 style={{
                   width: 64,
@@ -231,7 +231,7 @@ export function PlayerCard({ view, handlers }: PlayerCardProps) {
                   alignItems: "center",
                   justifyContent: "center",
                   background: view.theme.ctrlBg,
-                  opacity: view.controlsOpacity,
+                  opacity: view.playPauseOpacity,
                 }}
               >
                 {view.playing ? (
@@ -552,6 +552,16 @@ export function PlayerCard({ view, handlers }: PlayerCardProps) {
                   style={{ padding: "10px 18px", borderRadius: 999, background: "transparent", color: "#eef1f3", border: "1px solid rgba(182,191,193,0.35)", fontSize: 14, minHeight: 44 }}
                 >
                   Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handlers.stopVoiceAndSubmit}
+                  style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "10px 18px", borderRadius: 999, background: "#97acc8", color: "#051230", border: "none", fontSize: 14, fontWeight: 600, minHeight: 44 }}
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="#051230" aria-hidden="true">
+                    <rect x="6" y="6" width="12" height="12" rx="2" />
+                  </svg>
+                  Done
                 </button>
               </div>
             )}
