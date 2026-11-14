@@ -12,6 +12,7 @@ import {
   type GuestKey,
   type SpeakerCode,
 } from "@/data/mock/experience-demo";
+import type { AvatarKey } from "@/components/guests/avatarCharacters";
 import { formatSeconds } from "@/utils/time";
 
 import { playerTheme, type PlayerTheme } from "./theme";
@@ -26,6 +27,7 @@ export interface MemberView {
   color: string;
   radius: string;
   initials: string;
+  avatarKey: AvatarKey;
   fg: string;
   active: boolean;
   idle: boolean;
@@ -79,6 +81,7 @@ export interface TranscriptLineView {
   color: string;
   radius: string;
   initials: string;
+  avatarKey: AvatarKey;
   voiceId: string;
   nameColor: string;
   text: string;
@@ -115,6 +118,7 @@ export interface GuestOptionView {
   color: string;
   radius: string;
   initials: string;
+  avatarKey: AvatarKey;
   on: boolean;
   disabled: boolean;
   opacity: number;
@@ -257,6 +261,7 @@ export function deriveExperienceView(state: ExperienceState): ExperienceView {
       color: p.color,
       radius: p.radius,
       initials: p.initials,
+      avatarKey: p.avatarKey,
       voiceId: p.voiceId,
       nameColor: isLight ? theme.ink : p.color,
       text: l.x,
@@ -306,6 +311,7 @@ export function deriveExperienceView(state: ExperienceState): ExperienceView {
       color: p.color,
       radius: p.radius,
       initials: p.initials,
+      avatarKey: p.avatarKey,
       fg: "#051230",
       active,
       idle: !active,
@@ -324,6 +330,7 @@ export function deriveExperienceView(state: ExperienceState): ExperienceView {
       color: isLight ? "#051230" : "#e7ebee",
       radius: "50%",
       initials: "You",
+      avatarKey: "you",
       fg: isLight ? "#e7ebee" : "#051230",
       active: youActive,
       idle: !youActive,
@@ -513,6 +520,7 @@ export function deriveExperienceView(state: ExperienceState): ExperienceView {
         color: p.color,
         radius: p.radius,
         initials: p.initials,
+        avatarKey: p.avatarKey,
         on,
         disabled,
         opacity: disabled ? 0.45 : 1,

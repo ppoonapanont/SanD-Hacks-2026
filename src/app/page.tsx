@@ -94,10 +94,10 @@ export default function HomePage() {
             }}
           >
             <div style={{ display: "flex", gap: 16, alignItems: "center" }}>
-              <GuestAvatar initials="Mi" color="#97acc8" radius="50%" size={52} opacity={0.5} />
-              <GuestAvatar initials="AL" color="#e3b98a" radius="16px" size={52} opacity={0.5} />
-              <GuestAvatar initials="TO" color="#8fcaa8" radius="50% 50% 50% 12px" size={52} ring="0 0 0 3px #0a1a3d, 0 0 0 5px #8fcaa8" />
-              <GuestAvatar initials="WH" color="#e29fb0" radius="12px 50% 12px 50%" size={52} opacity={0.5} />
+              <GuestAvatar initials="Mi" avatarKey="host" size={52} opacity={0.5} />
+              <GuestAvatar initials="AL" avatarKey="ada" size={52} opacity={0.5} />
+              <GuestAvatar initials="TO" avatarKey="theo" size={52} active />
+              <GuestAvatar initials="WH" avatarKey="wren" size={52} opacity={0.5} />
               <span className="eq" style={{ color: "#8fcaa8", marginLeft: "auto" }} aria-hidden="true">
                 <span />
                 <span />

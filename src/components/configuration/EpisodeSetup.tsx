@@ -258,7 +258,7 @@ export function EpisodeSetup({ view, handlers }: EpisodeSetupProps) {
                   opacity: g.opacity,
                 }}
               >
-                <GuestAvatar initials={g.initials} color={g.color} radius={g.radius} />
+                <GuestAvatar initials={g.initials} avatarKey={g.avatarKey} />
                 <span style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 2 }}>
                   <span style={{ fontSize: 15, fontWeight: 600 }}>{g.name}</span>
                   <span style={{ fontSize: 13, color: "#b6bfc1" }}>{g.role}</span>
@@ -280,7 +280,7 @@ export function EpisodeSetup({ view, handlers }: EpisodeSetupProps) {
                 border: "1.5px dashed rgba(182,191,193,0.25)",
               }}
             >
-              <GuestAvatar initials={HOST_PROFILE.initials} color={HOST_PROFILE.color} radius={HOST_PROFILE.radius} />
+              <GuestAvatar initials={HOST_PROFILE.initials} avatarKey={HOST_PROFILE.avatarKey} />
               <span style={{ display: "flex", flexDirection: "column", gap: 2 }}>
                 <span style={{ fontSize: 15, fontWeight: 600 }}>{HOST_PROFILE.name}</span>
                 <span style={{ fontSize: 13, color: "#b6bfc1" }}>Host</span>

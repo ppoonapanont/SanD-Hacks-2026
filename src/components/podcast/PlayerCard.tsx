@@ -129,7 +129,7 @@ export function PlayerCard({ view, handlers }: PlayerCardProps) {
             <div style={{ display: "flex", gap: 18, alignItems: "flex-start", flexWrap: "wrap" }}>
               {view.members.map((m) => (
                 <div key={m.key} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 8, width: 72, opacity: m.opacity }}>
-                  <GuestAvatar initials={m.initials} color={m.color} radius={m.radius} textColor={m.fg} ring={m.ring} size={58} />
+                  <GuestAvatar initials={m.initials} avatarKey={m.avatarKey} size={58} active={m.active} />
                   <span style={{ fontSize: 12, fontWeight: 600, textAlign: "center", lineHeight: 1.2 }}>{m.short}</span>
                   {m.active ? (
                     <span className="eq" style={{ color: m.eqColor }} aria-label="Speaking">
@@ -615,7 +615,7 @@ function TranscriptLine({
 }) {
   return (
     <div style={{ display: "flex", gap: 14, alignItems: "flex-start", opacity: line.opacity }}>
-      <GuestAvatar initials={line.initials} color={line.color} radius={line.radius} size={34} />
+      <GuestAvatar initials={line.initials} avatarKey={line.avatarKey} size={34} />
       <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 6 }}>
         <div style={{ display: "flex", gap: 10, alignItems: "baseline", flexWrap: "wrap" }}>
           <span style={{ fontSize: 14, fontWeight: 600, color: line.nameColor }}>{line.name}</span>

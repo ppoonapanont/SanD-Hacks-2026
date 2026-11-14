@@ -29,7 +29,10 @@ export function useTurnAudio() {
   const pendingRef = useRef<Set<string>>(new Set());
 
   const speak = useCallback(
-    (line: SpeakableLine) => {
+    // `shouldPlay` is read when the (possibly async) audio is actually ready, not when `speak`
+    // was called — otherwise a generation request that resolves after the user hits pause would
+    // force playback back on.
+    (line: SpeakableLine, shouldPlay: () => boolean) => {
       const cached = cacheRef.current.get(line.turnId);
       if (cached) {
         audioQueue.enqueue({
@@ -38,7 +41,7 @@ export function useTurnAudio() {
           speakerId: line.speakerId,
           speakerName: line.speakerName,
         });
-        audioQueue.play();
+        if (shouldPlay()) audioQueue.play();
         return;
       }
       if (pendingRef.current.has(line.turnId)) return;
@@ -54,7 +57,7 @@ export function useTurnAudio() {
             speakerName: line.speakerName,
           };
           audioQueue.enqueue(item);
-          audioQueue.play();
+          if (shouldPlay()) audioQueue.play();
         })
         .catch((error: unknown) => {
           console.warn(`[useTurnAudio] audio generation skipped for "${line.turnId}":`, error);

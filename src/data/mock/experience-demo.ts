@@ -1,3 +1,5 @@
+import type { AvatarKey } from "@/components/guests/avatarCharacters";
+
 /**
  * Scripted demo content for the Experience screen prototype.
  *
@@ -19,6 +21,8 @@ export interface DemoGuestProfile {
   color: string;
   radius: string;
   initials: string;
+  /** Which Bible Strong Avatar Lab character renders this guest's bot avatar. */
+  avatarKey: AvatarKey;
   /** ElevenLabs voice ID — replace with a real voice once one is picked for this persona. */
   voiceId: string;
 }
@@ -32,6 +36,7 @@ export const HOST_PROFILE = {
   color: "#97acc8",
   radius: "50%",
   initials: "Mi",
+  avatarKey: "host" as AvatarKey,
   /** ElevenLabs stock voice "Alice" (Clear, Engaging Educator — female, British). */
   voiceId: "Xb7hH8MSUJpSbSDYk0k2",
 };
@@ -46,6 +51,7 @@ export const DEMO_GUESTS: Record<GuestKey, DemoGuestProfile> = {
     color: "#e3b98a",
     radius: "16px",
     initials: "AL",
+    avatarKey: "ada",
     /** ElevenLabs stock voice "Sarah" (Mature, Reassuring, Confident — female, American). */
     voiceId: "EXAVITQu4vr4xnSDxMaL",
   },
@@ -58,6 +64,7 @@ export const DEMO_GUESTS: Record<GuestKey, DemoGuestProfile> = {
     color: "#8fcaa8",
     radius: "50% 50% 50% 12px",
     initials: "TO",
+    avatarKey: "theo",
     /** ElevenLabs stock voice "Chris" (Charming, Down-to-Earth — male, American). */
     voiceId: "iP95p4xoKVk53GoZ742B",
   },
@@ -70,6 +77,7 @@ export const DEMO_GUESTS: Record<GuestKey, DemoGuestProfile> = {
     color: "#e29fb0",
     radius: "12px 50% 12px 50%",
     initials: "WH",
+    avatarKey: "wren",
     /** ElevenLabs stock voice "George" (Warm, Captivating Storyteller — male, British). */
     voiceId: "JBFqnCBsd6RMkjVDRZzb",
   },
@@ -82,6 +90,7 @@ export const DEMO_GUESTS: Record<GuestKey, DemoGuestProfile> = {
     color: "#b6a6e6",
     radius: "50% 50% 12px 12px",
     initials: "SR",
+    avatarKey: "sol",
     /** ElevenLabs stock voice "Laura" (Enthusiast, Quirky Attitude — female, American). */
     voiceId: "FGY2WhTYpPnrIDTdsKH5",
   },
@@ -94,6 +103,7 @@ export const DEMO_GUESTS: Record<GuestKey, DemoGuestProfile> = {
     color: "#e8d27a",
     radius: "6px",
     initials: "KM",
+    avatarKey: "kai",
     /** ElevenLabs stock voice "Eric" (Smooth, Trustworthy — male, American). */
     voiceId: "cjVigY5qzO86Huf0OWal",
   },

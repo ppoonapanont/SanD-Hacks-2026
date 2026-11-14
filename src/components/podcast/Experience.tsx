@@ -35,6 +35,12 @@ export function Experience() {
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const mediaStreamRef = useRef<MediaStream | null>(null);
   const audioChunksRef = useRef<BlobPart[]>([]);
+  // Read by useTurnAudio once a (possibly async) clip is actually ready, so a generation
+  // request that resolves after the user hits pause doesn't force playback back on.
+  const playingRef = useRef(state.playing);
+  useEffect(() => {
+    playingRef.current = state.playing;
+  }, [state.playing]);
 
   useEffect(() => {
     const id = setInterval(() => {
@@ -110,13 +116,16 @@ export function Experience() {
     }
     if (activeLine && activeLineKey !== lastSpokenKeyRef.current) {
       lastSpokenKeyRef.current = activeLineKey;
-      turnAudio.speak({
-        turnId: activeLine.key,
-        text: activeLine.text,
-        voiceId: activeLine.voiceId,
-        speakerId: activeLine.key,
-        speakerName: activeLine.name,
-      });
+      turnAudio.speak(
+        {
+          turnId: activeLine.key,
+          text: activeLine.text,
+          voiceId: activeLine.voiceId,
+          speakerId: activeLine.key,
+          speakerName: activeLine.name,
+        },
+        () => playingRef.current,
+      );
     } else {
       turnAudio.play();
     }
