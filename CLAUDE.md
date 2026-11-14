@@ -8,7 +8,7 @@ Our core differentiator is that users do not just listen to an AI-generated podc
 
 # Implementation Status
 
-Last updated: 2026-11-14 (News Engine complete — live SERP + Unlocker + Gemini verified)
+Last updated: 2026-11-14 (Podcast Generator MVP + transcript-synced ElevenLabs TTS; build verified)
 
 Status key: `COMPLETE` | `PARTIAL` | `STUB` | `NOT STARTED`
 
@@ -20,27 +20,27 @@ Status key: `COMPLETE` | `PARTIAL` | `STUB` | `NOT STARTED`
 | Repository structure from this doc | COMPLETE | Pages, API routes, components, mastra, services, lib, hooks, types |
 | Shared domain types (`src/types/podcast.ts`) | COMPLETE | Config, Guest, NewsSource, outline, turns, session |
 | Shared API contracts (`src/types/api.ts`) | COMPLETE | Request/response types for podcast + audio routes |
-| Typed API client (`src/lib/api/client.ts`) | COMPLETE | For Dev 2 UI wiring |
+| Typed API client (`src/lib/api/client.ts`) | COMPLETE | UI ↔ generate / audio / news |
 | Podcast config validation | COMPLETE | `src/lib/validation/podcast.ts` |
 | In-memory session store | COMPLETE | `src/lib/sessions.ts` (no external database used) |
 | Mock news + starter guests | COMPLETE | `src/data/mock/` — mock news marked `isMock: true` |
 | `.env.example` | COMPLETE | Gemini, Bright Data, ElevenLabs, Database |
-| Placeholder pages (home, configure, player, history) | COMPLETE | Structural only — Dev 2 owns final UI |
-| Dev 2 hooks scaffolds | COMPLETE | `usePodcastSession`, `useAudioQueue` |
+| App pages (home, configure/Experience, player, history) | COMPLETE | Experience is the live demo player on `/configure` |
+| Dev 2 audio hooks | COMPLETE | `useTurnAudio` + `useAudioQueue` (exclusive clip sync) |
 | Production build verified | COMPLETE | `npm run build` succeeds (Cache Components + Suspense on `/podcast/[id]`) |
 
 ## API routes
 
 | Method | Path | Status | Owner |
 |--------|------|--------|-------|
-| POST | `/api/podcast/generate` | STUB (501) | Dev 1 |
-| POST | `/api/podcast/next` | STUB (501) | Dev 1 |
-| POST | `/api/podcast/interact` | STUB (501) | Dev 1 |
-| POST | `/api/podcast/resume` | STUB (501) | Dev 1 |
+| POST | `/api/podcast/generate` | COMPLETE | Dev 1 — News Engine + Gemini script → session |
+| POST | `/api/podcast/next` | COMPLETE | Dev 1 — advances precomputed session turns |
+| POST | `/api/podcast/interact` | STUB (501) | Dev 1 — P1 interruption |
+| POST | `/api/podcast/resume` | STUB (501) | Dev 1 — P1 resume after interrupt |
 | GET | `/api/podcast/history` | COMPLETE | Shared (in-memory) |
 | GET | `/api/podcast/:id` | COMPLETE | Shared (in-memory) |
-| POST | `/api/audio/generate` | STUB (501) | Dev 2 |
-| POST | `/api/audio/transcribe` | STUB (501) | Dev 2 |
+| POST | `/api/audio/generate` | COMPLETE | Dev 2 — ElevenLabs TTS |
+| POST | `/api/audio/transcribe` | COMPLETE | Dev 2 — ElevenLabs STT |
 | POST | `/api/news/search` | COMPLETE | Dev 1 — Bright Data news test endpoint (mock fallback) |
 
 ## Developer 1 — AI and Backend
@@ -55,17 +55,19 @@ Status key: `COMPLETE` | `PARTIAL` | `STUB` | `NOT STARTED`
 | Source management | COMPLETE | Map → `NewsSource`, URL/title dedupe, scrapable-URL filter, `isMock` labeling |
 | Claim cross-referencing | COMPLETE | Related-story grouping + Gemini agreements/conflicts/uncertain (`crossReference.ts`) |
 
-**News Engine complete.** Next up for Dev 1: Podcast Generator (`/api/podcast/generate`).
+**News Engine complete.**
 
 ### Task 2: Podcast Generator
 
 | Item | Status | Location / notes |
 |------|--------|------------------|
-| Gemini integration | PARTIAL | `@google/genai` client used for news analysis; podcast generation not wired |
-| Episode outlines | NOT STARTED | Types exist only |
-| Duration and depth control | PARTIAL | Validated on generate stub; not applied to generation |
-| Custom guest personalities | STUB | Mock guest catalog only |
-| Structured conversation generation | NOT STARTED | `/generate` and `/next` return 501 |
+| Gemini integration | COMPLETE | `@google/genai` for news analysis + episode script (`src/services/podcast/generate.ts`) |
+| Episode outlines | COMPLETE | Chapters + timed H/A/B/C lines on 720s baseline; adapted for Experience |
+| Duration and depth control | COMPLETE | Passed into Gemini prompt; lines re-paced evenly after generation |
+| Custom guest personalities | PARTIAL | Experience guest map → config; mock catalog personas (not freeform create-guest yet) |
+| Structured conversation generation | COMPLETE | `/generate` builds session; `/next` walks turns; Experience loads `liveScript` |
+
+**Podcast Generator MVP complete** (direct Gemini, not Mastra). Next up for Dev 1: Agent System (`/interact`, `/resume`).
 
 ### Task 3: Agent System
 
@@ -75,7 +77,7 @@ Status key: `COMPLETE` | `PARTIAL` | `STUB` | `NOT STARTED`
 | Moderator logic | NOT STARTED | |
 | Guest agent coordination | NOT STARTED | |
 | User question handling | STUB | `/api/podcast/interact` returns 501 |
-| Live research | NOT STARTED | |
+| Live research | NOT STARTED | Experience uses demo research path only |
 | Conversation memory | PARTIAL | In-memory sessions only; no Mastra memory |
 
 ## Developer 2 — Frontend and Audio
@@ -84,40 +86,40 @@ Status key: `COMPLETE` | `PARTIAL` | `STUB` | `NOT STARTED`
 
 | Item | Status | Notes |
 |------|--------|-------|
-| Home page | STUB | Scaffold route only |
-| Topic selection | NOT STARTED | |
-| Duration and depth controls | NOT STARTED | |
-| Guest selection and customization | STUB | Mock guests listed on `/configure` |
+| Home page | COMPLETE | Branded landing with CTA into Experience |
+| Topic selection | COMPLETE | Experience setup topics |
+| Duration and depth controls | COMPLETE | Experience setup → generate config |
+| Guest selection and customization | PARTIAL | Pick up to 3 demo guests; no freeform persona builder yet |
 
 ### Task 2: Audio Engine
 
 | Item | Status | Notes |
 |------|--------|-------|
-| ElevenLabs integration | STUB | `src/services/elevenlabs/` config helpers only |
-| Audio generation | STUB | `/api/audio/generate` returns 501 |
-| Multi-speaker playback | NOT STARTED | |
-| Audio queue management | STUB | `useAudioQueue` scaffold |
-| Playback controls | NOT STARTED | |
+| ElevenLabs integration | COMPLETE | `src/services/elevenlabs/` TTS + STT clients |
+| Audio generation | COMPLETE | `/api/audio/generate` → MP3 blob URLs |
+| Multi-speaker playback | COMPLETE | Per-guest ElevenLabs voice IDs; exclusive clip per line |
+| Audio queue management | COMPLETE | `useAudioQueue.playExclusive` + `useTurnAudio` cache/prefetch |
+| Playback controls | COMPLETE | Play/pause; listen mode advances on clip end |
 
 ### Task 3: Interactive Podcast UI
 
 | Item | Status | Notes |
 |------|--------|-------|
-| Podcast player | STUB | `/podcast/[id]` scaffold |
-| Speaker visualization | NOT STARTED | |
-| Live transcripts | NOT STARTED | |
-| Microphone input | NOT STARTED | |
-| Interruption controls | NOT STARTED | |
-| Guest addressing | NOT STARTED | |
-| Conversation experience | NOT STARTED | |
+| Podcast player | COMPLETE | Experience player (`/configure`) |
+| Speaker visualization | COMPLETE | Active speaker / EQ treatment in Experience |
+| Live transcripts | COMPLETE | Timed transcript synced to TTS |
+| Microphone input | COMPLETE | Record → `/api/audio/transcribe` |
+| Interruption controls | PARTIAL | UI join/research flow works; backend still demo (not `/interact`) |
+| Guest addressing | PARTIAL | Panel highlights active speaker; no targeted address API yet |
+| Conversation experience | PARTIAL | Full listen loop live; interrupt path still scripted demo |
 
 ## Shared responsibilities
 
 | Item | Status | Notes |
 |------|--------|-------|
 | TypeScript interfaces | COMPLETE | `src/types/` |
-| API contracts | COMPLETE | Types + route stubs locked |
-| Frontend and backend integration | PARTIAL | Client + hooks ready; endpoints mostly unimplemented |
+| API contracts | COMPLETE | Types locked; generate/next/audio implemented |
+| Frontend and backend integration | PARTIAL | Generate + TTS/STT wired; interact/resume still open |
 | Vercel deployment | PARTIAL | Build verified locally; not yet imported/deployed on Vercel |
 | Testing | NOT STARTED | |
 | Hackathon presentation | NOT STARTED | |
@@ -130,17 +132,22 @@ Status key: `COMPLETE` | `PARTIAL` | `STUB` | `NOT STARTED`
 | Item | Status |
 |------|--------|
 | Working Bright Data news retrieval | COMPLETE (live SERP + Unlocker + Gemini analysis) |
-| Podcast configuration UI | STUB |
-| Duration and depth controls | NOT STARTED (API validation only) |
-| Multiple customizable AI guests | STUB (mock catalog) |
-| Mastra podcast generation workflow | NOT STARTED |
-| Multi-speaker ElevenLabs audio | NOT STARTED |
-| Functional podcast player | STUB |
-| Basic source citations | PARTIAL (News Engine returns citations; player UI not wired) |
+| Podcast configuration UI | COMPLETE (Experience setup) |
+| Duration and depth controls | COMPLETE |
+| Multiple customizable AI guests | PARTIAL (select demo guests; no freeform create yet) |
+| Mastra podcast generation workflow | NOT STARTED (MVP uses direct Gemini in `src/services/podcast/`) |
+| Multi-speaker ElevenLabs audio | COMPLETE (transcript-synced exclusive clips) |
+| Functional podcast player | COMPLETE (Experience) |
+| Basic source citations | COMPLETE (News Engine → Experience sources panel) |
 
 ### P1 — Core Differentiation
 
-All P1 items: **NOT STARTED** (interact/resume routes exist as 501 stubs only).
+| Item | Status |
+|------|--------|
+| Real interrupt via `/api/podcast/interact` | NOT STARTED (501; UI uses demo research/join) |
+| Resume via `/api/podcast/resume` | NOT STARTED (501) |
+| Live research during interrupt | NOT STARTED |
+| Mastra moderator / guest agents | NOT STARTED |
 
 # Core Features
 
@@ -827,7 +834,7 @@ Exact completion status for each checklist item lives in **Implementation Status
 
 ## Developer 1 — AI and Backend
 
-Primary paths: `src/services/bright-data/`, `src/services/news/`, `src/mastra/`, `src/app/api/podcast/`.
+Primary paths: `src/services/bright-data/`, `src/services/news/`, `src/services/podcast/`, `src/mastra/`, `src/app/api/podcast/`.
 
 ### Task 1: News Engine
 
@@ -839,11 +846,11 @@ Primary paths: `src/services/bright-data/`, `src/services/news/`, `src/mastra/`,
 
 ### Task 2: Podcast Generator
 
-- Gemini integration. — NOT STARTED
-- Episode outlines. — NOT STARTED
-- Duration and depth control. — PARTIAL (validation only)
-- Custom guest personalities. — STUB
-- Structured conversation generation. — NOT STARTED
+- Gemini integration. — COMPLETE (news + episode script)
+- Episode outlines. — COMPLETE
+- Duration and depth control. — COMPLETE
+- Custom guest personalities. — PARTIAL (mapped demo guests)
+- Structured conversation generation. — COMPLETE (`/generate` + `/next`; Experience `liveScript`)
 
 ### Task 3: Agent System
 
@@ -860,33 +867,33 @@ Primary paths: `src/components/`, `src/app/` pages, `src/services/elevenlabs/`, 
 
 ### Task 1: Podcast Setup UI
 
-- Home page. — STUB
-- Topic selection. — NOT STARTED
-- Duration and depth controls. — NOT STARTED
-- Guest selection and customization. — STUB
+- Home page. — COMPLETE
+- Topic selection. — COMPLETE (Experience)
+- Duration and depth controls. — COMPLETE (Experience)
+- Guest selection and customization. — PARTIAL (select demo guests)
 
 ### Task 2: Audio Engine
 
-- ElevenLabs integration. — STUB
-- Audio generation. — STUB (501)
-- Multi-speaker playback. — NOT STARTED
-- Audio queue management. — STUB
-- Playback controls. — NOT STARTED
+- ElevenLabs integration. — COMPLETE
+- Audio generation. — COMPLETE (`/api/audio/generate`)
+- Multi-speaker playback. — COMPLETE
+- Audio queue management. — COMPLETE (exclusive clip + prefetch)
+- Playback controls. — COMPLETE
 
 ### Task 3: Interactive Podcast UI
 
-- Podcast player. — STUB
-- Speaker visualization. — NOT STARTED
-- Live transcripts. — NOT STARTED
-- Microphone input. — NOT STARTED
-- Interruption controls. — NOT STARTED
-- Guest addressing. — NOT STARTED
-- Conversation experience. — NOT STARTED
+- Podcast player. — COMPLETE (Experience on `/configure`)
+- Speaker visualization. — COMPLETE
+- Live transcripts. — COMPLETE (TTS-synced)
+- Microphone input. — COMPLETE (STT)
+- Interruption controls. — PARTIAL (UI demo; no `/interact` yet)
+- Guest addressing. — PARTIAL
+- Conversation experience. — PARTIAL (listen live; interrupt still scripted)
 
 ## Shared Responsibilities
 
 - TypeScript interfaces. — COMPLETE
-- API contracts. — COMPLETE (stubs locked)
+- API contracts. — COMPLETE (generate/next/audio live; interact/resume stubbed)
 - Frontend and backend integration. — PARTIAL
 - Vercel deployment. — PARTIAL (build verified locally)
 - Testing. — NOT STARTED
@@ -924,6 +931,7 @@ src/
     bright-data/
     elevenlabs/
     news/
+    podcast/
   lib/
     database/
     audio/
