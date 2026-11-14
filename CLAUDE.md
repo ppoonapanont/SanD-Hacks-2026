@@ -6,6 +6,142 @@ This project is being built for SanD Hacks by a team of two developers.
 
 Our core differentiator is that users do not just listen to an AI-generated podcast — they assemble their dream podcast panel, customize the depth and duration of the discussion, and actively join the conversation.
 
+# Implementation Status
+
+Last updated: 2026-11-14
+
+Status key: `COMPLETE` | `PARTIAL` | `STUB` | `NOT STARTED`
+
+## Phase 0 — Shared foundation
+
+| Item | Status | Notes |
+|------|--------|-------|
+| Next.js + TypeScript + Tailwind scaffold | COMPLETE | App Router, `src/`, package name `sand-hacks-2026` |
+| Repository structure from this doc | COMPLETE | Pages, API routes, components, mastra, services, lib, hooks, types |
+| Shared domain types (`src/types/podcast.ts`) | COMPLETE | Config, Guest, NewsSource, outline, turns, session |
+| Shared API contracts (`src/types/api.ts`) | COMPLETE | Request/response types for podcast + audio routes |
+| Typed API client (`src/lib/api/client.ts`) | COMPLETE | For Dev 2 UI wiring |
+| Podcast config validation | COMPLETE | `src/lib/validation/podcast.ts` |
+| In-memory session store | COMPLETE | `src/lib/sessions.ts` (Neon not wired yet) |
+| Mock news + starter guests | COMPLETE | `src/data/mock/` — mock news marked `isMock: true` |
+| `.env.example` | COMPLETE | Gemini, Bright Data, ElevenLabs, Database |
+| Placeholder pages (home, configure, player, history) | COMPLETE | Structural only — Dev 2 owns final UI |
+| Dev 2 hooks scaffolds | COMPLETE | `usePodcastSession`, `useAudioQueue` |
+| Production build verified | PARTIAL | Build hit Cache Components/`params` Suspense issue; fix applied, re-verify pending |
+
+## API routes
+
+| Method | Path | Status | Owner |
+|--------|------|--------|-------|
+| POST | `/api/podcast/generate` | STUB (501) | Dev 1 |
+| POST | `/api/podcast/next` | STUB (501) | Dev 1 |
+| POST | `/api/podcast/interact` | STUB (501) | Dev 1 |
+| POST | `/api/podcast/resume` | STUB (501) | Dev 1 |
+| GET | `/api/podcast/history` | COMPLETE | Shared (in-memory) |
+| GET | `/api/podcast/:id` | COMPLETE | Shared (in-memory) |
+| POST | `/api/audio/generate` | STUB (501) | Dev 2 |
+| POST | `/api/audio/transcribe` | STUB (501) | Dev 2 |
+
+## Developer 1 — AI and Backend
+
+### Task 1: News Engine
+
+| Item | Status | Location / notes |
+|------|--------|------------------|
+| Bright Data integration | STUB | `src/services/bright-data/` — config helpers only; no API calls |
+| News collection | STUB | `src/services/news/` returns mock sources |
+| Article analysis | NOT STARTED | |
+| Source management | PARTIAL | `NewsSource` type + mock data; no live pipeline |
+| Claim cross-referencing | NOT STARTED | |
+
+**Next up for Dev 1:** implement live Bright Data retrieval and structured news output in `src/services/news/` + `src/services/bright-data/`.
+
+### Task 2: Podcast Generator
+
+| Item | Status | Location / notes |
+|------|--------|------------------|
+| Gemini integration | NOT STARTED | No SDK / client yet |
+| Episode outlines | NOT STARTED | Types exist only |
+| Duration and depth control | PARTIAL | Validated on generate stub; not applied to generation |
+| Custom guest personalities | STUB | Mock guest catalog only |
+| Structured conversation generation | NOT STARTED | `/generate` and `/next` return 501 |
+
+### Task 3: Agent System
+
+| Item | Status | Location / notes |
+|------|--------|------------------|
+| Mastra agents and workflows | STUB | `src/mastra/` folders + placeholder index |
+| Moderator logic | NOT STARTED | |
+| Guest agent coordination | NOT STARTED | |
+| User question handling | STUB | `/api/podcast/interact` returns 501 |
+| Live research | NOT STARTED | |
+| Conversation memory | PARTIAL | In-memory sessions only; no Mastra memory / Neon |
+
+## Developer 2 — Frontend and Audio
+
+### Task 1: Podcast Setup UI
+
+| Item | Status | Notes |
+|------|--------|-------|
+| Home page | STUB | Scaffold route only |
+| Topic selection | NOT STARTED | |
+| Duration and depth controls | NOT STARTED | |
+| Guest selection and customization | STUB | Mock guests listed on `/configure` |
+
+### Task 2: Audio Engine
+
+| Item | Status | Notes |
+|------|--------|-------|
+| ElevenLabs integration | STUB | `src/services/elevenlabs/` config helpers only |
+| Audio generation | STUB | `/api/audio/generate` returns 501 |
+| Multi-speaker playback | NOT STARTED | |
+| Audio queue management | STUB | `useAudioQueue` scaffold |
+| Playback controls | NOT STARTED | |
+
+### Task 3: Interactive Podcast UI
+
+| Item | Status | Notes |
+|------|--------|-------|
+| Podcast player | STUB | `/podcast/[id]` scaffold |
+| Speaker visualization | NOT STARTED | |
+| Live transcripts | NOT STARTED | |
+| Microphone input | NOT STARTED | |
+| Interruption controls | NOT STARTED | |
+| Guest addressing | NOT STARTED | |
+| Conversation experience | NOT STARTED | |
+
+## Shared responsibilities
+
+| Item | Status | Notes |
+|------|--------|-------|
+| TypeScript interfaces | COMPLETE | `src/types/` |
+| API contracts | COMPLETE | Types + route stubs locked |
+| Frontend and backend integration | PARTIAL | Client + hooks ready; endpoints mostly unimplemented |
+| Neon database | NOT STARTED | `DATABASE_URL` reserved; using in-memory store |
+| Vultr deployment | NOT STARTED | |
+| Testing | NOT STARTED | |
+| Hackathon presentation | NOT STARTED | |
+| Sponsor track submissions | NOT STARTED | |
+
+## P0 / P1 progress snapshot
+
+### P0 — Essential Product
+
+| Item | Status |
+|------|--------|
+| Working Bright Data news retrieval | NOT STARTED (mock fallback exists) |
+| Podcast configuration UI | STUB |
+| Duration and depth controls | NOT STARTED (API validation only) |
+| Multiple customizable AI guests | STUB (mock catalog) |
+| Mastra podcast generation workflow | NOT STARTED |
+| Multi-speaker ElevenLabs audio | NOT STARTED |
+| Functional podcast player | STUB |
+| Basic source citations | NOT STARTED (types + mock sources only) |
+
+### P1 — Core Differentiation
+
+All P1 items: **NOT STARTED** (interact/resume routes exist as 501 stubs only).
+
 # Core Features
 
 ## 1. Personalized Podcast Generation
@@ -712,76 +848,84 @@ Implement a working version of the interruption workflow early because it is the
 
 # Team Responsibilities
 
+Exact completion status for each checklist item lives in **Implementation Status** above. Keep that section current when finishing work.
+
 ## Developer 1 — AI and Backend
+
+Primary paths: `src/services/bright-data/`, `src/services/news/`, `src/mastra/`, `src/app/api/podcast/`.
 
 ### Task 1: News Engine
 
-- Bright Data integration.
-- News collection.
-- Article analysis.
-- Source management.
-- Claim cross-referencing.
+- Bright Data integration. — STUB
+- News collection. — STUB (mock)
+- Article analysis. — NOT STARTED
+- Source management. — PARTIAL
+- Claim cross-referencing. — NOT STARTED
 
 ### Task 2: Podcast Generator
 
-- Gemini integration.
-- Episode outlines.
-- Duration and depth control.
-- Custom guest personalities.
-- Structured conversation generation.
+- Gemini integration. — NOT STARTED
+- Episode outlines. — NOT STARTED
+- Duration and depth control. — PARTIAL (validation only)
+- Custom guest personalities. — STUB
+- Structured conversation generation. — NOT STARTED
 
 ### Task 3: Agent System
 
-- Mastra agents and workflows.
-- Moderator logic.
-- Guest agent coordination.
-- User question handling.
-- Live research.
-- Conversation memory.
+- Mastra agents and workflows. — STUB
+- Moderator logic. — NOT STARTED
+- Guest agent coordination. — NOT STARTED
+- User question handling. — STUB (501)
+- Live research. — NOT STARTED
+- Conversation memory. — PARTIAL (in-memory only)
 
 ## Developer 2 — Frontend and Audio
 
+Primary paths: `src/components/`, `src/app/` pages, `src/services/elevenlabs/`, `src/app/api/audio/`, `src/lib/audio/`, `src/hooks/`.
+
 ### Task 1: Podcast Setup UI
 
-- Home page.
-- Topic selection.
-- Duration and depth controls.
-- Guest selection and customization.
+- Home page. — STUB
+- Topic selection. — NOT STARTED
+- Duration and depth controls. — NOT STARTED
+- Guest selection and customization. — STUB
 
 ### Task 2: Audio Engine
 
-- ElevenLabs integration.
-- Audio generation.
-- Multi-speaker playback.
-- Audio queue management.
-- Playback controls.
+- ElevenLabs integration. — STUB
+- Audio generation. — STUB (501)
+- Multi-speaker playback. — NOT STARTED
+- Audio queue management. — STUB
+- Playback controls. — NOT STARTED
 
 ### Task 3: Interactive Podcast UI
 
-- Podcast player.
-- Speaker visualization.
-- Live transcripts.
-- Microphone input.
-- Interruption controls.
-- Guest addressing.
-- Conversation experience.
+- Podcast player. — STUB
+- Speaker visualization. — NOT STARTED
+- Live transcripts. — NOT STARTED
+- Microphone input. — NOT STARTED
+- Interruption controls. — NOT STARTED
+- Guest addressing. — NOT STARTED
+- Conversation experience. — NOT STARTED
 
 ## Shared Responsibilities
 
-- TypeScript interfaces.
-- API contracts.
-- Frontend and backend integration.
-- Neon database.
-- Vultr deployment.
-- Testing.
-- Hackathon presentation.
-- Sponsor track submissions.
+- TypeScript interfaces. — COMPLETE
+- API contracts. — COMPLETE (stubs locked)
+- Frontend and backend integration. — PARTIAL
+- Neon database. — NOT STARTED
+- Vultr deployment. — NOT STARTED
+- Testing. — NOT STARTED
+- Hackathon presentation. — NOT STARTED
+- Sponsor track submissions. — NOT STARTED
 
 Avoid modifying another developer's modules unnecessarily.
 
-Agree on shared data structures and API contracts before implementing dependent features.
+Agree on shared data structures and API contracts before implementing dependent features. Types and route shapes are already locked in `src/types/` — extend carefully.
 
 # Suggested Repository Structure
+
+This structure has been created under `src/`. Prefer adapting existing folders over restructuring.
 
 src/
   app/
@@ -810,9 +954,13 @@ src/
     database/
     audio/
     validation/
+    api/
+    sessions.ts
   hooks/
   types/
   utils/
+  data/
+    mock/
 
 Keep the repository structure simple.
 
