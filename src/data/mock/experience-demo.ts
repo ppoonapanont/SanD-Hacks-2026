@@ -32,7 +32,8 @@ export const HOST_PROFILE = {
   color: "#97acc8",
   radius: "50%",
   initials: "Mi",
-  voiceId: "PLACEHOLDER_VOICE_MIRA",
+  /** ElevenLabs stock voice "Alice" (Clear, Engaging Educator — female, British). */
+  voiceId: "Xb7hH8MSUJpSbSDYk0k2",
 };
 
 export const DEMO_GUESTS: Record<GuestKey, DemoGuestProfile> = {
@@ -45,7 +46,8 @@ export const DEMO_GUESTS: Record<GuestKey, DemoGuestProfile> = {
     color: "#e3b98a",
     radius: "16px",
     initials: "AL",
-    voiceId: "PLACEHOLDER_VOICE_ADA",
+    /** ElevenLabs stock voice "Sarah" (Mature, Reassuring, Confident — female, American). */
+    voiceId: "EXAVITQu4vr4xnSDxMaL",
   },
   theo: {
     id: "theo",
@@ -56,7 +58,8 @@ export const DEMO_GUESTS: Record<GuestKey, DemoGuestProfile> = {
     color: "#8fcaa8",
     radius: "50% 50% 50% 12px",
     initials: "TO",
-    voiceId: "PLACEHOLDER_VOICE_THEO",
+    /** ElevenLabs stock voice "Chris" (Charming, Down-to-Earth — male, American). */
+    voiceId: "iP95p4xoKVk53GoZ742B",
   },
   wren: {
     id: "wren",
@@ -67,7 +70,8 @@ export const DEMO_GUESTS: Record<GuestKey, DemoGuestProfile> = {
     color: "#e29fb0",
     radius: "12px 50% 12px 50%",
     initials: "WH",
-    voiceId: "PLACEHOLDER_VOICE_WREN",
+    /** ElevenLabs stock voice "George" (Warm, Captivating Storyteller — male, British). */
+    voiceId: "JBFqnCBsd6RMkjVDRZzb",
   },
   sol: {
     id: "sol",
@@ -78,7 +82,8 @@ export const DEMO_GUESTS: Record<GuestKey, DemoGuestProfile> = {
     color: "#b6a6e6",
     radius: "50% 50% 12px 12px",
     initials: "SR",
-    voiceId: "PLACEHOLDER_VOICE_SOL",
+    /** ElevenLabs stock voice "Laura" (Enthusiast, Quirky Attitude — female, American). */
+    voiceId: "FGY2WhTYpPnrIDTdsKH5",
   },
   kai: {
     id: "kai",
@@ -89,7 +94,8 @@ export const DEMO_GUESTS: Record<GuestKey, DemoGuestProfile> = {
     color: "#e8d27a",
     radius: "6px",
     initials: "KM",
-    voiceId: "PLACEHOLDER_VOICE_KAI",
+    /** ElevenLabs stock voice "Eric" (Smooth, Trustworthy — male, American). */
+    voiceId: "cjVigY5qzO86Huf0OWal",
   },
 };
 
