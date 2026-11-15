@@ -33,19 +33,31 @@ interface OverlayLine {
 }
 
 /** Ad-recording script for the overlay — distinct from the main app's demo content. */
+// Marcus stays out of the pre-interrupt segment — he first speaks in the
+// continuation after Resume, once he's actually been built as a custom guest.
 const OVERLAY_SCRIPT: OverlayLine[] = [
   { s: "H", x: "Let's dive into where the money's going this quarter." },
   { s: "A", x: "Enterprise AI spending is surging, but chip supply is the real bottleneck for new deployments." },
-  { s: "B", x: "Founders are already building around that constraint instead of waiting on it." },
+  { s: "B", x: "Right, and founders feel that first, Jordan — we're already building around the constraint instead of waiting on you all to fix supply." },
 ];
 
 /** Auto-fires once the main segment ends — the recorded "interrupt" beat, no typing needed. */
-const AUTO_QUESTION = "What are the bottlenecks?";
+const AUTO_QUESTION = "What are the other bottlenecks?";
 
-// Addressed only to Ava, so only Ava answers.
+// Addressed only to Ava, so only Ava answers — then straight to Resume.
 const OVERLAY_RESPONSE: OverlayLine[] = [
   { s: "H", x: "Great question — Ava, that one's for you." },
-  { s: "B", x: "The bottleneck's shifting from compute to power. If energy and chips can't keep pace, nothing else matters." },
+  { s: "B", x: "Honestly, it's shifting under us — compute's not the constraint anymore, it's power. If energy and chips can't keep pace, none of what Jordan just said about chip supply even matters." },
+];
+
+// After Resume, the main discussion keeps going with new material — never a
+// repeat of the pre-interrupt lines — before the whole recording loops.
+const OVERLAY_CONTINUATION: OverlayLine[] = [
+  { s: "A", x: "Ava's right, and that changes who I'd back for the next round — the companies solving for power, not just chip access." },
+  { s: "C", x: "Exactly, and that kind of shift shows up in financing costs before it ever shows up in an official report." },
+  { s: "B", x: "Which is why founders are already pricing that risk in, Marcus — we're not waiting for the data to catch up." },
+  { s: "H", x: "So it sounds like we're all watching power infrastructure as much as chips now." },
+  { s: "A", x: "Exactly — that's where the next wave of capital is heading." },
 ];
 
 // Intro setup animation — topic chips, the panel it builds from six guest
@@ -69,7 +81,7 @@ const CUSTOM_AVATAR_CHIPS: { key: GuestKey; label: string }[] = [
   { key: "politician", label: "Cone" },
 ];
 
-type Mode = "setupTopics" | "setupGuests" | "setupCustom" | "loop" | "typing" | "asking" | "resuming";
+type Mode = "setupTopics" | "setupGuests" | "setupCustom" | "loop" | "typing" | "asking" | "resuming" | "continuing";
 
 /**
  * Chroma-key overlay for recording a video ad: an intro that shows picking
@@ -80,7 +92,8 @@ type Mode = "setupTopics" | "setupGuests" | "setupCustom" | "loop" | "typing" | 
  * automatic interrupt beat. No typing or mic input needed during the
  * recording: it plays the setup, the main segment, "types" the interrupt
  * question, plays Ava's response (she's the only one addressed), shows an
- * auto-pressed Resume button, then loops the main segment onward, hands-off.
+ * auto-pressed Resume button, then the panel keeps discussing with new
+ * lines (never a repeat) before the whole recording loops from the intro.
  *
  * Not part of the product — a recording aid only, linked from nowhere.
  */
@@ -89,6 +102,7 @@ export default function OverlayPage() {
   const [mode, setMode] = useState<Mode>("setupTopics");
   const [lineIndex, setLineIndex] = useState(0);
   const [joinIndex, setJoinIndex] = useState(0);
+  const [contIndex, setContIndex] = useState(0);
   const [typedQuestion, setTypedQuestion] = useState("");
   const [resumePressed, setResumePressed] = useState(false);
   const [selectedTopicCount, setSelectedTopicCount] = useState(0);
@@ -106,6 +120,7 @@ export default function OverlayPage() {
   const modeRef = useRef(mode);
   const lineIndexRef = useRef(lineIndex);
   const joinIndexRef = useRef(joinIndex);
+  const contIndexRef = useRef(contIndex);
   useEffect(() => {
     modeRef.current = mode;
   }, [mode]);
@@ -115,6 +130,9 @@ export default function OverlayPage() {
   useEffect(() => {
     joinIndexRef.current = joinIndex;
   }, [joinIndex]);
+  useEffect(() => {
+    contIndexRef.current = contIndex;
+  }, [contIndex]);
 
   // Reset per-cycle UI the instant mode flips, rather than in an effect body
   // (avoids a cascading-render setState-in-effect and a one-frame stale flash).
@@ -211,6 +229,30 @@ export default function OverlayPage() {
         } else {
           setJoinIndex(idx + 1);
         }
+        return;
+      }
+      const contMatch = /^OC(\d+)$/.exec(turnId);
+      if (contMatch && modeRef.current === "continuing") {
+        const idx = Number(contMatch[1]);
+        if (idx !== contIndexRef.current) return;
+        if (idx + 1 >= OVERLAY_CONTINUATION.length) {
+          // Whole recording loops from the very start, not just the main segment.
+          setLineIndex(0);
+          setJoinIndex(0);
+          setContIndex(0);
+          setSelectedTopicCount(0);
+          setSelectedGuestCount(0);
+          setCustomNameLen(0);
+          setCustomExpertiseLen(0);
+          setCustomPersonalityLen(0);
+          setCustomTypeSelected(false);
+          setCustomAvatarSelected(false);
+          setCustomPressed(false);
+          setCustomSaved(false);
+          setMode("setupTopics");
+        } else {
+          setContIndex(idx + 1);
+        }
       }
     };
     turnAudio.setOnClipEnded(advance);
@@ -262,20 +304,32 @@ export default function OverlayPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mode, joinIndex]);
 
-  // Show a Resume button, auto-press it, then loop back to the main segment.
+  // Show a Resume button, auto-press it, then the main discussion keeps
+  // going with new lines (not a repeat) until the whole recording loops.
   useEffect(() => {
     if (mode !== "resuming") return;
     const pressTimer = setTimeout(() => setResumePressed(true), 700);
     const continueTimer = setTimeout(() => {
       setJoinIndex(0);
-      setLineIndex(0);
-      setMode("loop");
+      setMode("continuing");
     }, 1300);
     return () => {
       clearTimeout(pressTimer);
       clearTimeout(continueTimer);
     };
   }, [mode]);
+
+  // Speak the current continuation line whenever it changes.
+  useEffect(() => {
+    if (mode !== "continuing") return;
+    const line = OVERLAY_CONTINUATION[contIndex];
+    const profile = profileFor(SLOT[line.s]);
+    turnAudio.speak(
+      { turnId: `OC${contIndex}`, text: line.x, voiceId: profile.voiceId, speakerId: profile.id, speakerName: profile.name },
+      () => modeRef.current === "continuing",
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mode, contIndex]);
 
   const activeId = (
     mode === "loop"
@@ -284,14 +338,20 @@ export default function OverlayPage() {
         ? "you"
         : mode === "asking"
           ? SLOT[OVERLAY_RESPONSE[joinIndex].s]
-          : "none"
+          : mode === "continuing"
+            ? SLOT[OVERLAY_CONTINUATION[contIndex].s]
+            : "none"
   ) as GuestKey | "host" | "you" | "none";
 
   const loopTail = OVERLAY_SCRIPT.slice(Math.max(0, lineIndex - 2), lineIndex + 1);
   const joinTail = OVERLAY_RESPONSE.slice(0, joinIndex + 1);
+  const contTail = OVERLAY_CONTINUATION.slice(Math.max(0, contIndex - 2), contIndex + 1);
   const showSetup = mode === "setupTopics" || mode === "setupGuests" || mode === "setupCustom";
-  const showQuestion = !showSetup && mode !== "loop";
+  // The "You" bubble only matters while a question is pending or being answered —
+  // once the panel picks the discussion back up, it's their conversation again.
+  const showQuestion = mode === "typing" || mode === "asking" || mode === "resuming";
   const showResponse = mode === "asking" || mode === "resuming";
+  const showContinuation = mode === "continuing";
 
   const customActiveField =
     customNameLen < CUSTOM_GUEST_DEMO.name.length
@@ -660,6 +720,15 @@ export default function OverlayPage() {
                 </div>
               </div>
             )}
+
+            {showContinuation &&
+              contTail.map((line, i) => {
+                const p = profileFor(SLOT[line.s]);
+                const isCurrent = i === contTail.length - 1;
+                return (
+                  <Bubble key={`cont-${contIndex}-${i}`} name={p.name} color={p.color} initials={p.initials} avatarKey={p.avatarKey} text={line.x} current={isCurrent} />
+                );
+              })}
           </div>
         </>
       )}
