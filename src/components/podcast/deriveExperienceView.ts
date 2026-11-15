@@ -314,17 +314,21 @@ export function deriveExperienceView(state: ExperienceState): ExperienceView {
       if (l.t * sc <= state.t + 0.001) shown.push({ line: l, idx });
     });
   }
-  const tail = shown.slice(-5);
-  const ops = [0.34, 0.42, 0.52, 0.66, 1];
-  const lines: TranscriptLineView[] = tail.map((o, j) => {
-    const isCur = j === tail.length - 1;
+  // Full revealed history (scrollable) — not a 5-line tail that drops the open.
+  const lines: TranscriptLineView[] = shown.map((o, j) => {
+    const isCur = j === shown.length - 1;
+    // Live turns store real episode seconds; script mode uses the 720s baseline.
+    const lineSeconds = state.liveGeneration ? o.line.t : o.line.t * sc;
+    // Older lines stay readable; only soft-fade the far past so scrollback works.
+    const age = shown.length - 1 - j;
+    const opacity = isCur ? 1 : age >= 8 ? 0.55 : age >= 4 ? 0.72 : 0.88;
     return lineView(o.line, `L${o.idx}`, {
-      time: formatSeconds(o.line.t * sc),
-      opacity: ops[5 - tail.length + j],
+      time: formatSeconds(lineSeconds),
+      opacity,
       fontSize: isCur ? 19 : 15,
     });
   });
-  const curLine = tail.length ? tail[tail.length - 1].line : null;
+  const curLine = shown.length ? shown[shown.length - 1]!.line : null;
 
   const joinScript = state.liveJoinLines ?? DEMO_JOIN_LINES;
   const joinLines: TranscriptLineView[] = joinScript.slice(0, state.joinN).map((l, j) =>

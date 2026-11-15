@@ -23,17 +23,16 @@ export async function POST(request: Request) {
   }
 
   try {
-    const result = await generatePodcastEpisode(validation.config);
-    const response: GeneratePodcastResponse & {
-      usedMockNews: boolean;
-      errors: string[];
-      producerUsed: boolean;
-    } = {
+    const result = await generatePodcastEpisode(validation.config, {
+      live: Boolean(body.live),
+    });
+    const response: GeneratePodcastResponse = {
       session: result.session,
       usedMockNews: result.usedMockNews,
       errors: result.errors,
       producerUsed: result.producerUsed,
       producerSummary: result.producerSummary,
+      live: result.live,
     };
     return NextResponse.json(response);
   } catch (error) {

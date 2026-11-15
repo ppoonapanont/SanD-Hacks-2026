@@ -12,16 +12,20 @@ import type {
 /** POST /api/podcast/generate */
 export interface GeneratePodcastRequest {
   config: PodcastConfig;
+  /** When true, seed the episode and generate further lines via POST /next. */
+  live?: boolean;
 }
 
 export interface GeneratePodcastResponse {
   session: PodcastSession;
   usedMockNews?: boolean;
   errors?: string[];
-  /** True when Mastra Producer shaped the episode brief before scripting. */
+  /** True when the Mastra Producer shaped the episode brief before scripting. */
   producerUsed?: boolean;
   /** Short producer arc summary for UI notes. */
   producerSummary?: string;
+  /** True when this session expects live POST /next turn generation. */
+  live?: boolean;
 }
 
 /** POST /api/podcast/next */
@@ -32,6 +36,12 @@ export interface NextTurnRequest {
 export interface NextTurnResponse {
   session: PodcastSession;
   turn: ConversationTurn;
+  /** True when the turn was freshly generated (live mode). */
+  generated?: boolean;
+  /** True when the episode should end after this turn. */
+  done?: boolean;
+  /** Soft failures (e.g. Gemini quota → heuristic fallback line). */
+  errors?: string[];
 }
 
 /** POST /api/podcast/interact */

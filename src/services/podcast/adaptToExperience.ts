@@ -75,6 +75,19 @@ function toDemoSource(source: NewsSource): DemoSource {
   };
 }
 
+/** Map a single ConversationTurn into an Experience script line. */
+export function adaptTurnToScriptLine(
+  turn: ConversationTurn,
+  guestIds: string[],
+  sources: NewsSource[],
+): DemoScriptLine | null {
+  const sourceIndexById = new Map<string, number>();
+  sources.forEach((source, index) => {
+    sourceIndexById.set(source.id, index + 1);
+  });
+  return toDemoLine(turn, guestIds, sourceIndexById);
+}
+
 function toDemoLine(
   turn: ConversationTurn,
   guestIds: string[],

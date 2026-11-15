@@ -66,6 +66,43 @@ export function useAudioQueue() {
 
   /** Replace the queue with a single clip and start it. Use for line-synced TTS. */
   const playExclusive = useCallback((item: AudioQueueItem) => {
+    const el = audioRef.current;
+    const existing = queueRef.current[currentIndexRef.current];
+    const srcMatches =
+      !!el?.src &&
+      (el.src === item.audioUrl ||
+        el.src.endsWith(item.audioUrl) ||
+        (item.audioUrl.startsWith("blob:") && el.src === item.audioUrl));
+    // Pause → play often re-speaks the same turnId/url. The load effect deps do not
+    // change, so disarming without re-arming left playback permanently stuck.
+    if (
+      existing?.turnId === item.turnId &&
+      existing?.audioUrl === item.audioUrl &&
+      srcMatches &&
+      el
+    ) {
+      ignoreEndedRef.current = false;
+      if (clipExhaustedRef.current) {
+        try {
+          el.currentTime = 0;
+        } catch {
+          // Metadata may not be ready yet.
+        }
+        clipExhaustedRef.current = false;
+        clipPlayableAtRef.current = performance.now();
+      } else if (clipPlayableAtRef.current === 0) {
+        clipPlayableAtRef.current = performance.now();
+      }
+      armedTurnIdRef.current = item.turnId;
+      queueRef.current = [item];
+      currentIndexRef.current = 0;
+      setQueue([item]);
+      setCurrentIndex(0);
+      setPlaying(true);
+      void el.play().catch(() => {});
+      return;
+    }
+
     // Hold ignore until the src effect arms this turn — a microtask release was too
     // early: cached TTS could finishClip(newTurn) while currentTime was still at the
     // previous clip's end (same voice / back-to-back lines skipped silently).
@@ -73,7 +110,6 @@ export function useAudioQueue() {
     clipExhaustedRef.current = false;
     armedTurnIdRef.current = null;
     clipPlayableAtRef.current = 0;
-    const el = audioRef.current;
     if (el) el.pause();
 
     queueRef.current = [item];

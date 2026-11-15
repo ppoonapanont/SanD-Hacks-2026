@@ -82,6 +82,9 @@ export interface ConversationTurn {
   topicId?: string;
 }
 
+/** `live` = outline + seed turns, then POST /next generates each line. */
+export type PodcastGenerationMode = "script" | "live";
+
 export interface PodcastSession {
   id: string;
   config: PodcastConfig;
@@ -90,6 +93,8 @@ export interface PodcastSession {
   sources: NewsSource[];
   currentTopicId?: string;
   status: PodcastSessionStatus;
+  /** How dialogue is produced for this session. Defaults to full `script`. */
+  generationMode?: PodcastGenerationMode;
   createdAt: string;
   updatedAt: string;
   errorMessage?: string;
