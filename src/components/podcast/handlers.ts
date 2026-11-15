@@ -28,6 +28,7 @@ export interface ExperienceHandlers {
   stopVoiceAndSubmit: () => void;
   cancelVoice: () => void;
   resume: () => void;
+  endEpisode: () => void;
   pickSuggestion: (suggestion: SuggestionView) => void;
   toggleCitation: (id: string) => void;
 }

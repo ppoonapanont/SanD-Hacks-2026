@@ -1291,6 +1291,25 @@ export function Experience() {
         });
       }
     },
+    // Ends the current episode (mid-playback or after it's done) and returns to
+    // setup for a new one. Bumping the epoch refs drops any in-flight generate/
+    // interrupt response that would otherwise land after this reset.
+    endEpisode: () => {
+      turnAudio.clear();
+      lastSpokenKeyRef.current = null;
+      generateEpochRef.current += 1;
+      interruptEpochRef.current += 1;
+      setState((prev) => ({
+        ...BASE_STATE,
+        topics: prev.topics,
+        region: prev.region,
+        language: prev.language,
+        duration: prev.duration,
+        depth: prev.depth,
+        guests: prev.guests,
+        customGuests: prev.customGuests,
+      }));
+    },
     pickSuggestion: (suggestion: SuggestionView) => {
       if (suggestion.skip) {
         setState((prev) => {
