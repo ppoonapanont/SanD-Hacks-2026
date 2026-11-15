@@ -4,7 +4,12 @@ import type { ConversationTurn, PodcastSession } from "@/types";
 import { createId } from "@/utils/id";
 
 import { hostDisplayName } from "./guestMap";
+import { sanitizeHostSpokenLine } from "./interact";
 import { clearInterruptRecord, getInterruptRecord } from "./interruptStore";
+
+function sanitizeResumeHostLine(text: string, hostName: string): string {
+  return sanitizeHostSpokenLine(text, hostName);
+}
 
 export interface ResumeResult {
   session: PodcastSession;
@@ -62,9 +67,12 @@ async function buildBridgeLine(
   if (!isGeminiConfigured()) return fallback;
 
   try {
+    const hostName = hostDisplayName();
     const result = await generateJson<{ text: string }>(
       [
-        "You are the podcast host. Write one short spoken sentence bridging from a user interruption back to the main episode.",
+        `You are ${hostName}, the podcast host. Speak in first person to the listener.`,
+        "Write one short spoken sentence bridging from a user interruption back to the main episode.",
+        `Never address yourself as ${hostName}, never say "back to you, ${hostName}", and never hand the floor to the host.`,
         "Do not invent news facts.",
         `Episode: ${session.outline?.title ?? "current discussion"}`,
         lastQuestion ? `User had asked: ${lastQuestion}` : "",
@@ -73,7 +81,7 @@ async function buildBridgeLine(
       BRIDGE_SCHEMA,
       { timeoutMs: 15_000 },
     );
-    const text = String(result.text ?? "").trim();
+    const text = sanitizeResumeHostLine(String(result.text ?? "").trim(), hostName);
     return text || fallback;
   } catch {
     return fallback;

@@ -32,7 +32,8 @@ const MODERATOR_SCHEMA = {
     },
     hostAck: {
       type: "string",
-      description: "Short host line acknowledging the user before guests speak",
+      description:
+        "Short first-person host line acknowledging the user before guests speak. Never address the host by name.",
     },
   },
   required: ["needsResearch", "researchQuery", "respondingGuestIds", "hostAck"],
@@ -59,7 +60,8 @@ const REPLIES_SCHEMA = {
     },
     closingHost: {
       type: "string",
-      description: "Short host line offering follow-up or resume",
+      description:
+        "Short first-person host line to the listener offering a follow-up or resume. Never say 'back to you' to the host or use the host's name.",
     },
   },
   required: ["replies", "closingHost"],
@@ -222,7 +224,10 @@ async function planModeratorResponse(
           ? responding.slice(0, 2)
           : fallback.respondingGuestIds,
       hostAck:
-        String(result.hostAck ?? "").trim() || fallback.hostAck,
+        sanitizeHostSpokenLine(
+          String(result.hostAck ?? "").trim(),
+          hostDisplayName(),
+        ) || fallback.hostAck,
     };
   } catch (error) {
     errors.push(
@@ -331,6 +336,7 @@ async function buildReplyTurns(input: {
     .join("\n");
 
   try {
+    const hostName = hostDisplayName();
     const result = await generateJson<GuestReplies>(
       [
         "You write short spoken replies for a live podcast interruption.",
@@ -339,7 +345,13 @@ async function buildReplyTurns(input: {
         "If sources are thin/mock, stay general and say what is uncertain.",
         "Each guest reply: 1-3 sentences, distinct voice, no repeating each other.",
         "",
-        `Host: ${hostDisplayName()}`,
+        `The host is ${hostName}. closingHost is spoken BY ${hostName} to the listener.`,
+        "closingHost must be first person (I/we/you the listener).",
+        `Never write "back to you, ${hostName}", never address ${hostName} by name,`,
+        "and never hand the floor to the host — she is already speaking.",
+        "Good closingHost examples: \"Want a follow-up, or should we pick the episode back up?\"",
+        "Bad: \"Back to you, Mira, to see where we take this next.\"",
+        "",
         `User question: ${message}`,
         "",
         "Responding guests:",
@@ -391,7 +403,10 @@ async function buildReplyTurns(input: {
       }
     }
 
-    const closing = String(result.closingHost ?? "").trim();
+    const closing = sanitizeHostSpokenLine(
+      String(result.closingHost ?? "").trim(),
+      hostName,
+    );
     turns.push({
       id: createId("turn"),
       speakerId: host.id,
@@ -449,6 +464,35 @@ function hostSpeaker(): { id: string; name: string; voiceId?: string } {
 
 function fallbackGuestReply(guest: Guest, message: string): string {
   return `From a ${guest.expertise.toLowerCase()} angle, that question matters: "${message.slice(0, 80)}${message.length > 80 ? "…" : ""}". I'd want better data before claiming a clean answer.`;
+}
+
+/**
+ * Host lines are first-person. Models sometimes emit producer-style cues like
+ * "Back to you, Mira…" — rewrite those so Mira never addresses herself.
+ */
+export function sanitizeHostSpokenLine(text: string, hostName: string): string {
+  const raw = text.trim();
+  if (!raw) return "";
+
+  const name = hostName.trim() || "Mira";
+  const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const selfAddress =
+    new RegExp(
+      `\\b(back\\s+to\\s+you|over\\s+to\\s+you|back\\s+to)\\s*,?\\s*${escaped}\\b`,
+      "i",
+    ).test(raw) ||
+    new RegExp(`\\b${escaped}\\s*,\\s*(take|take\\s+us|see\\s+where)\\b`, "i").test(
+      raw,
+    );
+
+  if (selfAddress) {
+    return "Want a follow-up, or should we head back to where we were?";
+  }
+
+  // Drop a leading "Mira:" label if the model prepends the speaker name.
+  return raw
+    .replace(new RegExp(`^${escaped}\\s*[:\\-—–]\\s*`, "i"), "")
+    .trim();
 }
 
 function mergeSources(existing: NewsSource[], incoming: NewsSource[]): NewsSource[] {
