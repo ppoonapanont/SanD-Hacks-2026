@@ -97,6 +97,8 @@ export interface TopicChipView {
   id: string;
   label: string;
   on: boolean;
+  disabled: boolean;
+  opacity: number;
   bg: string;
   fg: string;
   border: string;
@@ -607,10 +609,13 @@ export function deriveExperienceView(state: ExperienceState): ExperienceView {
     waveDelays,
     topicList: DEMO_TOPICS.map((tp) => {
       const on = state.topics.includes(tp.id);
+      const disabled = !on && state.topics.length >= 3;
       return {
         id: tp.id,
         label: tp.label,
         on,
+        disabled,
+        opacity: disabled ? 0.45 : 1,
         bg: on ? "#97acc8" : "transparent",
         fg: on ? "#051230" : "#eef1f3",
         border: on ? "#97acc8" : "rgba(182,191,193,0.3)",

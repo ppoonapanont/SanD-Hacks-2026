@@ -387,8 +387,12 @@ export function Experience() {
     toggleTopic: (id) =>
       setState((prev) => {
         const on = prev.topics.includes(id);
-        const next = on ? prev.topics.filter((x) => x !== id) : [...prev.topics, id];
-        return next.length ? { ...prev, topics: next } : prev;
+        if (on) {
+          const next = prev.topics.filter((x) => x !== id);
+          return next.length ? { ...prev, topics: next } : prev;
+        }
+        if (prev.topics.length < 3) return { ...prev, topics: [...prev.topics, id] };
+        return prev;
       }),
     pickDepth: (label) => setState((prev) => ({ ...prev, depth: label })),
     toggleGuest: (id: string) =>

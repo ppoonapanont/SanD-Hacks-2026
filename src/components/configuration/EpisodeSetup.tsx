@@ -108,7 +108,9 @@ export function EpisodeSetup({ view, handlers }: EpisodeSetupProps) {
       <div style={{ display: "flex", flexWrap: "wrap", gap: 28 }}>
         <div style={{ flex: "1 1 380px", minWidth: 0, display: "flex", flexDirection: "column", gap: 22 }}>
           <fieldset style={{ border: "none", margin: 0, padding: 0, display: "flex", flexDirection: "column", gap: 10 }}>
-            <legend style={{ ...label, marginBottom: 0 }}>Topics</legend>
+            <legend style={{ ...label, marginBottom: 0 }}>
+              Topics · {view.topicList.filter((tp) => tp.on).length}/3
+            </legend>
             <p style={{ margin: 0, fontFamily: "'Space Grotesk', sans-serif", fontSize: 20, fontWeight: 600, letterSpacing: "-0.01em" }}>
               What do you want to know today?
             </p>
@@ -118,6 +120,7 @@ export function EpisodeSetup({ view, handlers }: EpisodeSetupProps) {
                   key={tp.id}
                   type="button"
                   onClick={() => handlers.toggleTopic(tp.id)}
+                  disabled={tp.disabled}
                   aria-pressed={tp.on}
                   style={{
                     padding: "10px 16px",
@@ -128,6 +131,8 @@ export function EpisodeSetup({ view, handlers }: EpisodeSetupProps) {
                     background: tp.bg,
                     color: tp.fg,
                     border: `1px solid ${tp.border}`,
+                    opacity: tp.opacity,
+                    cursor: tp.disabled ? "not-allowed" : "pointer",
                   }}
                 >
                   {tp.label}
