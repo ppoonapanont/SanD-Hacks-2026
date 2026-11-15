@@ -1,6 +1,7 @@
 "use client";
 
 import { AVATAR_COLORS, AVATARS, type AvatarKey } from "./avatarCharacters";
+import { RoleBadge } from "./RoleBadge";
 
 export interface GuestAvatarProps {
   /** Which Bible Strong Avatar Lab character to render. */
@@ -14,7 +15,12 @@ export interface GuestAvatarProps {
 }
 
 /**
- * A Bible Strong Avatar Lab bot avatar (github.com/smontlouis/bible-strong-avatar-lab).
+ * A Bible Strong Avatar Lab bot avatar (github.com/smontlouis/bible-strong-avatar-lab), plus
+ * a fixed role-icon badge in the corner.
+ *
+ * The badge is the real differentiator from a generic "two eyes on a colored blob" mascot:
+ * it doesn't move with the body's idle/speaking animation, so it stays legible and correctly
+ * placed no matter what the avatar underneath is doing.
  *
  * Deliberately avoids the library's "Spinners" group of states (e.g. `dictating`) while
  * speaking: those states `morph` the body into a dot spinner, replacing the character's actual
@@ -28,6 +34,7 @@ export function GuestAvatar({ avatarKey, initials, size = 48, opacity = 1, class
   return (
     <span
       style={{
+        position: "relative",
         display: "inline-flex",
         borderRadius: "50%",
         boxShadow: active ? `0 0 0 3px rgba(5,18,48,0.4), 0 0 16px 2px ${glowColor}` : "none",
@@ -42,6 +49,7 @@ export function GuestAvatar({ avatarKey, initials, size = 48, opacity = 1, class
         ariaLabel={initials}
         settleAfterMs={active ? 0 : 4000}
       />
+      <RoleBadge avatarKey={avatarKey} size={Math.max(14, Math.round(size * 0.4))} />
     </span>
   );
 }

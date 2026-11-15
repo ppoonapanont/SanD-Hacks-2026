@@ -2,11 +2,11 @@ import { createAvatar } from "@bible-strong/avatar-react";
 import type { AvatarCharacter, AvatarBodyDefinition } from "@bible-strong/avatar-core";
 
 /**
- * Bible Strong Avatar Lab characters (https://github.com/smontlouis/bible-strong-avatar-lab),
- * rendered via @bible-strong/avatar-react. The host keeps the library's own "Grok bot" shape
- * (a plain sphere); each guest gets a distinct geometric primitive so no two characters share
- * a silhouette. Every character keeps the same standard eyes and flat perspective; only the
- * body shape and color vary.
+ * Bible Strong Avatar Lab characters (https://github.com/smontlouis/bible-strong-avatar-lab).
+ * Each guest gets a distinct geometric primitive so no two characters share a silhouette.
+ * The face is deliberately tuned away from the library's own "Grok bot" preset (which uses
+ * flat perspective and tall, narrow pill eyes): rounder, more widely-spaced eyes, a slight
+ * 3D perspective, and a thin outline instead of a flat silhouette.
  */
 export type AvatarKey =
   | "host"
@@ -36,7 +36,8 @@ function character(name: string, bodyColor: `#${string}`, primary: Surface): Ava
     name,
     body: { primary, nodes: [] },
     colors: { body: bodyColor, eyes: "#051230" },
-    face: { eyes: { width: 1, height: 1, gap: 1, shiftY: 0 }, perspective: 0 },
+    style: { outline: { enabled: true, color: "#051230", width: 5, opacity: 0.45 } },
+    face: { eyes: { width: 0.85, height: 0.85, gap: 1.4, shiftY: 0.05 }, perspective: 0.4 },
   };
 }
 

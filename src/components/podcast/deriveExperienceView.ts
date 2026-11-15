@@ -427,8 +427,12 @@ export function deriveExperienceView(state: ExperienceState): ExperienceView {
   const topicLabels = DEMO_TOPICS.filter((t) => state.topics.includes(t.id)).map((t) => t.label);
   const summary = `${topicLabels.join(", ")} · ${state.region} · ${state.language} · ${state.duration} min · ${state.depth} · ${state.guests.length} ${state.guests.length === 1 ? "guest" : "guests"}`;
 
-  const gk = Math.floor(state.k / 4);
-  const generatingSteps: StepView[] = ["Finding stories", "Casting panel", "Writing script"].map((label, i) => ({
+  const gk = Math.floor(state.k / 8);
+  const generatingSteps: StepView[] = [
+    "Finding today's stories",
+    "Cross-checking sources",
+    "Writing the panel script",
+  ].map((label, i) => ({
     label,
     done: i < gk,
     active: i === gk,

@@ -178,8 +178,10 @@ export function Experience() {
     const id = setInterval(() => {
       setState((prev) => {
         if (prev.phase === "generating") {
-          // Keep the generating animation looping until the API finishes.
-          return { ...prev, k: (prev.k + 1) % 12 };
+          // Advance through the step list once (~6s total, 2s/step), then hold
+          // on the last step (still spinning) until the API actually finishes —
+          // looping back to "Finding stories" every few seconds reads as broken/stuck.
+          return { ...prev, k: Math.min(prev.k + 1, 23) };
         }
         if (prev.phase !== "episode") return prev;
 
