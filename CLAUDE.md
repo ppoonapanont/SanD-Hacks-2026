@@ -8,9 +8,17 @@ Our core differentiator is that users do not just listen to an AI-generated podc
 
 # Implementation Status
 
-Last updated: 2026-11-14 (P1 interrupt/resume MVP wired; Podcast Generator + TTS sync)
+Last updated: 2026-11-14 (**v1** tagged conceptually — stable voice/transcript sync, **without Mastra-driven generation**)
 
 Status key: `COMPLETE` | `PARTIAL` | `STUB` | `NOT STARTED`
+
+## Version milestones
+
+| Version | Commit | Meaning |
+|---------|--------|---------|
+| **v1** | `6c97d05` — *Stabilize Experience voice/transcript sync before playback.* | Stable Experience baseline **before** Mastra multi-agent generation. Direct Gemini writes the full episode script; ElevenLabs TTS is **preloaded before playback**; transcript uses a `listenN` cursor locked to the speaking line; scrubber follows real clip progress; generate/interrupt races guarded by epoch refs. Interrupt/resume via Gemini moderator in `interact.ts` / `resume.ts`. Mastra package may be installed for Studio scaffolding, but **episode generation is not Mastra-orchestrated**. Treat this commit as the restore point for “pre-Mastra product.” |
+
+When adding Mastra-driven prep/live `/next`, branch from or compare against **v1 (`6c97d05`)**.
 
 ## Phase 0 — Shared foundation
 
@@ -65,15 +73,15 @@ Status key: `COMPLETE` | `PARTIAL` | `STUB` | `NOT STARTED`
 | Episode outlines | COMPLETE | Chapters + timed H/A/B/C lines on 720s baseline; adapted for Experience |
 | Duration and depth control | COMPLETE | Passed into Gemini prompt; lines re-paced evenly after generation |
 | Custom guest personalities | COMPLETE | Experience guest map + freeform Create guest builder (name/expertise/personality/voice/avatar) → PodcastConfig |
-| Structured conversation generation | COMPLETE | `/generate` builds session; `/next` walks turns; Experience loads `liveScript` |
+| Structured conversation generation | COMPLETE | **v1:** `/generate` builds full script; Experience preloads TTS then plays `liveScript`; `/next` still walks precomputed turns |
 
-**Podcast Generator MVP complete** (direct Gemini, not Mastra).
+**Podcast Generator MVP complete** (**v1 = direct Gemini, not Mastra**).
 
 ### Task 3: Agent System
 
 | Item | Status | Location / notes |
 |------|--------|------------------|
-| Mastra agents and workflows | COMPLETE | `@mastra/core` + `mastra` installed; research/moderator agents, tools, interruption/resume workflows; Studio via `npm run mastra:dev` |
+| Mastra agents and workflows | PARTIAL | **v1:** `@mastra/core` installed + research/moderator + interrupt/resume workflows for Studio; **episode generate is still direct Gemini** (Mastra multi-agent prep/live turns = post-v1) |
 | Moderator logic | COMPLETE | Gemini moderator plan (who answers + research need) in `interact.ts` |
 | Guest agent coordination | COMPLETE | Distinct guest reply turns from Gemini; targetGuestId supported |
 | User question handling | COMPLETE | `/api/podcast/interact` + Experience `beginInterrupt` (demo fallback) |
@@ -98,8 +106,8 @@ Status key: `COMPLETE` | `PARTIAL` | `STUB` | `NOT STARTED`
 | ElevenLabs integration | COMPLETE | `src/services/elevenlabs/` TTS + STT clients |
 | Audio generation | COMPLETE | `/api/audio/generate` → MP3 blob URLs |
 | Multi-speaker playback | COMPLETE | Per-guest ElevenLabs voice IDs; exclusive clip per line |
-| Audio queue management | COMPLETE | `useAudioQueue.playExclusive` + `useTurnAudio` cache/prefetch |
-| Playback controls | COMPLETE | Play/pause; listen mode advances on clip end |
+| Audio queue management | COMPLETE | **v1:** `useTurnAudio.preload` before play; text+voice cache keys; `clipExhausted` blocks replay; `timeupdate` drives scrubber |
+| Playback controls | COMPLETE | Play/pause; listen mode advances on clip end via `listenN` |
 
 ### Task 3: Interactive Podcast UI
 
@@ -107,7 +115,7 @@ Status key: `COMPLETE` | `PARTIAL` | `STUB` | `NOT STARTED`
 |------|--------|-------|
 | Podcast player | COMPLETE | Experience player (`/configure`) |
 | Speaker visualization | COMPLETE | Active speaker / EQ treatment in Experience |
-| Live transcripts | COMPLETE | Timed transcript synced to TTS |
+| Live transcripts | COMPLETE | **v1:** `listenN` cursor locks active line to spoken clip (no mid-line flicker) |
 | Microphone input | COMPLETE | Record → `/api/audio/transcribe` |
 | Interruption controls | COMPLETE | Research → live join lines from `/interact` (incl. `targetGuestId`); resume via `/resume` |
 | Guest addressing | COMPLETE | Composer Address chip row shapes `targetGuestId` on `/interact` |
@@ -135,8 +143,8 @@ Status key: `COMPLETE` | `PARTIAL` | `STUB` | `NOT STARTED`
 | Podcast configuration UI | COMPLETE (Experience setup) |
 | Duration and depth controls | COMPLETE |
 | Multiple customizable AI guests | COMPLETE (demo presets + freeform Create guest builder) |
-| Mastra podcast generation workflow | PARTIAL (episode generate still direct Gemini; interrupt/resume registered as Mastra workflows) |
-| Multi-speaker ElevenLabs audio | COMPLETE (transcript-synced exclusive clips) |
+| Mastra podcast generation workflow | PARTIAL (**v1 baseline:** direct Gemini generate; Mastra Studio scaffolding only — multi-agent generate is post-v1) |
+| Multi-speaker ElevenLabs audio | COMPLETE (**v1:** preload-all TTS, transcript-locked exclusive clips) |
 | Functional podcast player | COMPLETE (Experience) |
 | Basic source citations | COMPLETE (News Engine → Experience sources panel) |
 
@@ -851,11 +859,11 @@ Primary paths: `src/services/bright-data/`, `src/services/news/`, `src/services/
 - Episode outlines. — COMPLETE
 - Duration and depth control. — COMPLETE
 - Custom guest personalities. — COMPLETE (mapped demo guests + freeform Create guest builder)
-- Structured conversation generation. — COMPLETE (`/generate` + `/next`; Experience `liveScript`)
+- Structured conversation generation. — COMPLETE (**v1** `6c97d05`: full-script generate + TTS preload; not Mastra)
 
 ### Task 3: Agent System
 
-- Mastra agents and workflows. — COMPLETE (`@mastra/core`; Studio: `npm run mastra:dev`)
+- Mastra agents and workflows. — PARTIAL (**v1:** package + Studio scaffolding; multi-agent generate is post-v1)
 - Moderator logic. — COMPLETE
 - Guest agent coordination. — COMPLETE
 - User question handling. — COMPLETE (`/interact`)
@@ -885,7 +893,7 @@ Primary paths: `src/components/`, `src/app/` pages, `src/services/elevenlabs/`, 
 
 - Podcast player. — COMPLETE (Experience on `/configure`)
 - Speaker visualization. — COMPLETE
-- Live transcripts. — COMPLETE (TTS-synced)
+- Live transcripts. — COMPLETE (**v1:** `listenN` locked to spoken clip)
 - Microphone input. — COMPLETE (STT)
 - Interruption controls. — COMPLETE (`/interact` + `/resume`, with `targetGuestId`)
 - Guest addressing. — COMPLETE (Address chips + targetGuestId)
