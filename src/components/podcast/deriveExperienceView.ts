@@ -301,10 +301,18 @@ export function deriveExperienceView(state: ExperienceState): ExperienceView {
     };
   }
 
+  // Prefer listenN so the active line cannot change until clip-end advances it.
   const shown: { line: (typeof episodeScript)[number]; idx: number }[] = [];
-  episodeScript.forEach((l, idx) => {
-    if (l.t * sc <= state.t + 0.001) shown.push({ line: l, idx });
-  });
+  if (state.listenN > 0) {
+    const limit = Math.min(state.listenN, episodeScript.length);
+    for (let idx = 0; idx < limit; idx++) {
+      shown.push({ line: episodeScript[idx], idx });
+    }
+  } else {
+    episodeScript.forEach((l, idx) => {
+      if (l.t * sc <= state.t + 0.001) shown.push({ line: l, idx });
+    });
+  }
   const tail = shown.slice(-5);
   const ops = [0.34, 0.42, 0.52, 0.66, 1];
   const lines: TranscriptLineView[] = tail.map((o, j) => {
@@ -322,11 +330,13 @@ export function deriveExperienceView(state: ExperienceState): ExperienceView {
     lineView(l, `J${j}`),
   );
   const joinDone = mode === "joined" && state.joinN >= joinScript.length;
-  const nextJoinLine = joinScript[state.joinN];
+  const currentJoinLine =
+    state.joinN > 0 ? joinScript[Math.min(state.joinN - 1, joinScript.length - 1)] : null;
+  const upcomingJoinLine = joinScript[state.joinN];
 
   let activeId: string | null = null;
   if (mode === "listen" && state.playing && curLine) activeId = slot[curLine.s];
-  if (mode === "joined" && !joinDone && nextJoinLine) activeId = slot[nextJoinLine.s];
+  if (mode === "joined" && !joinDone && currentJoinLine) activeId = slot[currentJoinLine.s];
   if (mode === "voice") activeId = "you";
 
   const memberIds = ["host", ...activeGuests];
@@ -594,7 +604,7 @@ export function deriveExperienceView(state: ExperienceState): ExperienceView {
     joinLines,
     joinTyping: mode === "joined" && !joinDone,
     joinDone,
-    nextSpeakerName: nextJoinLine ? profileFor(slot[nextJoinLine.s]).short : "",
+    nextSpeakerName: upcomingJoinLine ? profileFor(slot[upcomingJoinLine.s]).short : "",
     question: state.question,
     youBubble: isLight ? { bg: "#051230", fg: "#e7ebee" } : { bg: "#e7ebee", fg: "#051230" },
     hasNote: !!state.note && mode === "listen",

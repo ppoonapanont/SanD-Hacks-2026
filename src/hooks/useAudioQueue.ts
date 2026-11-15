@@ -18,8 +18,14 @@ export function useAudioQueue() {
   const queueRef = useRef<AudioQueueItem[]>([]);
   const currentIndexRef = useRef(0);
   const onClipEndedRef = useRef<((turnId: string) => void) | null>(null);
+  const onTimeUpdateRef = useRef<((info: { turnId: string; currentTime: number; duration: number }) => void) | null>(null);
   /** When true, ignore `ended` (programmatic pause/src swap must not advance the transcript). */
   const ignoreEndedRef = useRef(false);
+  /**
+   * After a clip finishes naturally, block play()/effect resume from restarting
+   * it from t=0 until a new playExclusive() loads the next line.
+   */
+  const clipExhaustedRef = useRef(false);
 
   useEffect(() => {
     queueRef.current = queue;
@@ -52,6 +58,7 @@ export function useAudioQueue() {
   /** Replace the queue with a single clip and start it. Use for line-synced TTS. */
   const playExclusive = useCallback((item: AudioQueueItem) => {
     ignoreEndedRef.current = true;
+    clipExhaustedRef.current = false;
     const el = audioRef.current;
     if (el) el.pause();
 
@@ -69,6 +76,7 @@ export function useAudioQueue() {
 
   const clear = useCallback(() => {
     ignoreEndedRef.current = true;
+    clipExhaustedRef.current = false;
     const el = audioRef.current;
     if (el) {
       el.pause();
@@ -105,6 +113,20 @@ export function useAudioQueue() {
     onClipEndedRef.current = cb;
   }, []);
 
+  const setOnTimeUpdate = useCallback(
+    (cb: ((info: { turnId: string; currentTime: number; duration: number }) => void) | null) => {
+      onTimeUpdateRef.current = cb;
+    },
+    [],
+  );
+
+  const play = useCallback(() => {
+    if (clipExhaustedRef.current) return;
+    setPlaying(true);
+  }, []);
+
+  const pause = useCallback(() => setPlaying(false), []);
+
   // Swap the audio source whenever the current item changes.
   useEffect(() => {
     const el = audioRef.current;
@@ -115,13 +137,14 @@ export function useAudioQueue() {
     const alreadyLoaded = el.src === nextSrc || el.src.endsWith(nextSrc);
     if (!alreadyLoaded) {
       ignoreEndedRef.current = true;
+      clipExhaustedRef.current = false;
       el.src = nextSrc;
       el.load();
       queueMicrotask(() => {
         ignoreEndedRef.current = false;
       });
     }
-    if (playing) {
+    if (playing && !clipExhaustedRef.current) {
       void el.play().catch(() => {
         // Autoplay can be blocked until the user interacts with the page; ignore.
       });
@@ -132,21 +155,45 @@ export function useAudioQueue() {
   useEffect(() => {
     const el = audioRef.current;
     if (!el) return;
-    if (playing) void el.play().catch(() => {});
-    else el.pause();
+    if (playing) {
+      if (clipExhaustedRef.current) return;
+      void el.play().catch(() => {});
+    } else {
+      el.pause();
+    }
   }, [playing]);
 
-  // Natural end only — Experience advances the transcript, then speak() loads the next line.
+  // Natural end + timeline ticks while a clip plays.
   useEffect(() => {
     const el = audioRef.current;
     if (!el) return;
+
     const handleEnded = () => {
       if (ignoreEndedRef.current) return;
+      clipExhaustedRef.current = true;
+      setPlaying(false);
       const finished = queueRef.current[currentIndexRef.current];
       if (finished) onClipEndedRef.current?.(finished.turnId);
     };
+
+    const handleTimeUpdate = () => {
+      if (ignoreEndedRef.current || clipExhaustedRef.current) return;
+      const item = queueRef.current[currentIndexRef.current];
+      if (!item) return;
+      const duration = Number.isFinite(el.duration) && el.duration > 0 ? el.duration : 0;
+      onTimeUpdateRef.current?.({
+        turnId: item.turnId,
+        currentTime: el.currentTime,
+        duration,
+      });
+    };
+
     el.addEventListener("ended", handleEnded);
-    return () => el.removeEventListener("ended", handleEnded);
+    el.addEventListener("timeupdate", handleTimeUpdate);
+    return () => {
+      el.removeEventListener("ended", handleEnded);
+      el.removeEventListener("timeupdate", handleTimeUpdate);
+    };
   }, []);
 
   return {
@@ -154,8 +201,8 @@ export function useAudioQueue() {
     currentIndex,
     current,
     playing,
-    play: useCallback(() => setPlaying(true), []),
-    pause: useCallback(() => setPlaying(false), []),
+    play,
+    pause,
     enqueue,
     playExclusive,
     clear,
@@ -163,5 +210,6 @@ export function useAudioQueue() {
     skipBackward,
     setCurrentIndex,
     setOnClipEnded,
+    setOnTimeUpdate,
   };
 }

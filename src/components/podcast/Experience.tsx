@@ -95,14 +95,37 @@ function advanceListenPastTurn(
   const script = prev.liveScript ?? DEMO_SCRIPT;
   if (!script[idx]) return prev;
 
-  // Ignore stale callbacks from a line we've already left.
-  if (activeScriptIndex(script, prev.t, prev.duration) !== idx) return prev;
+  // listenN is 1-based; active line is listenN - 1.
+  if (prev.listenN - 1 !== idx) return prev;
 
   const next = script[idx + 1];
   if (!next) {
     return { ...prev, t: prev.duration * 60, playing: false };
   }
-  return { ...prev, t: scaleT(next.t, prev.duration) };
+  return {
+    ...prev,
+    listenN: idx + 2,
+    t: scaleT(next.t, prev.duration),
+    playing: true,
+  };
+}
+
+function speakableFromScript(
+  script: Array<{ s: SpeakerCode; x: string }>,
+  guests: string[],
+  customGuests: Record<string, PanelGuestProfile>,
+  prefix: "L" | "J",
+) {
+  return script.map((line, i) => {
+    const profile = profileForGuestSlot(guests, customGuests, line.s);
+    return {
+      turnId: `${prefix}${i}`,
+      text: line.x,
+      voiceId: profile.voiceId,
+      speakerId: `${prefix}${i}`,
+      speakerName: profile.name,
+    };
+  });
 }
 
 function advanceJoinPastTurn(
@@ -141,6 +164,9 @@ export function Experience() {
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const mediaStreamRef = useRef<MediaStream | null>(null);
   const audioChunksRef = useRef<BlobPart[]>([]);
+  /** Bumps on each generate/interrupt so stale async completions cannot rewind the UI. */
+  const generateEpochRef = useRef(0);
+  const interruptEpochRef = useRef(0);
   // Read by useTurnAudio once a (possibly async) clip is actually ready, so a generation
   // request that resolves after the user hits pause doesn't force playback back on.
   const playingRef = useRef(state.playing);
@@ -216,6 +242,7 @@ export function Experience() {
       turnAudio.pause();
       return;
     }
+    // Only start TTS when the active line changes — never replay an exhausted clip.
     if (activeLine && activeLineKey !== lastSpokenKeyRef.current) {
       lastSpokenKeyRef.current = activeLineKey;
       turnAudio.speak(
@@ -228,11 +255,42 @@ export function Experience() {
         },
         () => playingRef.current,
       );
-    } else if (turnAudio.current?.turnId === activeLineKey) {
-      turnAudio.play();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isSpeakingPhase, state.mode, state.playing, activeLineKey]);
+
+  // Drive the scrubber from real audio progress within the current line window.
+  useEffect(() => {
+    turnAudio.setOnTimeUpdate((info) => {
+      setState((prev) => {
+        if (prev.phase !== "episode" || prev.mode !== "listen" || !prev.playing) {
+          return prev;
+        }
+        const match = /^L(\d+)$/.exec(info.turnId);
+        if (!match) return prev;
+        const idx = Number(match[1]);
+        if (prev.listenN - 1 !== idx) return prev;
+
+        const script = prev.liveScript ?? DEMO_SCRIPT;
+        const line = script[idx];
+        if (!line) return prev;
+        const start = scaleT(line.t, prev.duration);
+        const next = script[idx + 1];
+        const end = next ? scaleT(next.t, prev.duration) : prev.duration * 60;
+        const span = Math.max(0.01, end - start);
+        const frac =
+          info.duration > 0
+            ? Math.min(1, Math.max(0, info.currentTime / info.duration))
+            : 0;
+        const t = start + span * frac;
+        // Avoid noisy re-renders for sub-100ms scrubber jitter.
+        if (Math.abs(t - prev.t) < 0.08) return prev;
+        return { ...prev, t };
+      });
+    });
+    return () => turnAudio.setOnTimeUpdate(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Prefetch the next couple of lines (episode or interrupt) so audio stays ready.
   useEffect(() => {
@@ -309,76 +367,95 @@ export function Experience() {
     turnAudio.clear();
     lastSpokenKeyRef.current = null;
 
-    setState((prev) => {
-      const snapshot = {
-        ...prev,
-        ...startResearchPatch(question),
-        liveJoinLines: null,
-        note: "Researching your question…",
-        noteK: 0,
+    const epoch = ++interruptEpochRef.current;
+    const stillCurrent = () => interruptEpochRef.current === epoch;
+    const snap: ExperienceState = {
+      ...state,
+      ...startResearchPatch(question),
+      liveJoinLines: null,
+      note: "Researching your question…",
+      noteK: 0,
+    };
+
+    setState(snap);
+
+    void (async () => {
+      const startJoined = async (
+        joinLines: typeof DEMO_JOIN_LINES | null,
+        note: string,
+        liveSources?: ExperienceState["liveSources"],
+      ) => {
+        if (!stillCurrent()) return;
+        const script = joinLines ?? DEMO_JOIN_LINES;
+        setState((cur) => ({
+          ...cur,
+          mode: "research",
+          playing: false,
+          found5: true,
+          note: "Preparing reply voices…",
+          noteK: 0,
+          ...(liveSources ? { liveSources } : {}),
+        }));
+        await turnAudio.preload(
+          speakableFromScript(script, snap.guests, snap.customGuests, "J"),
+          { concurrency: 3 },
+        );
+        if (!stillCurrent()) return;
+        lastSpokenKeyRef.current = null;
+        setState((cur) => ({
+          ...cur,
+          mode: "joined",
+          joinN: script.length ? 1 : 0,
+          k: 0,
+          playing: true,
+          found5: true,
+          liveJoinLines: joinLines,
+          note,
+          noteK: 0,
+          ...(liveSources ? { liveSources } : {}),
+        }));
       };
 
-      void (async () => {
-        const finishWithDemo = (reason?: string) => {
-          setState((cur) => ({
-            ...cur,
-            mode: "joined",
-            joinN: 1,
-            k: 0,
-            playing: true,
-            found5: true,
-            liveJoinLines: null,
-            note: reason ?? "",
-            noteK: 0,
-          }));
-        };
+      if (!snap.sessionId) {
+        window.setTimeout(() => {
+          if (!stillCurrent()) return;
+          void startJoined(null, "");
+        }, 1200);
+        return;
+      }
 
-        if (!snapshot.sessionId) {
-          window.setTimeout(() => finishWithDemo(), 1200);
-          return;
-        }
-
-        try {
-          const result = await interact({
-            sessionId: snapshot.sessionId,
-            message: question,
-            ...(snapshot.targetGuestId
-              ? { targetGuestId: snapshot.targetGuestId }
-              : {}),
-          });
-          const sources = { ...(snapshot.liveSources ?? {}) };
-          const joinLines = adaptInteractTurnsToJoinLines(
-            result.turns,
-            snapshot.guests,
-            sources,
-            result.session.sources,
-          );
-          setState((cur) => ({
-            ...cur,
-            mode: "joined",
-            joinN: joinLines.length ? 1 : 0,
-            k: 0,
-            playing: true,
-            found5: true,
-            liveJoinLines: joinLines.length ? joinLines : null,
-            liveSources: Object.keys(sources).length ? sources : cur.liveSources,
-            note: result.usedMockResearch
-              ? "Interrupt research used mock/fallback sources"
-              : "Panel answering your question",
-            noteK: 0,
-          }));
-        } catch (error) {
-          console.warn("[Experience] interact failed:", error);
-          finishWithDemo(
-            error instanceof Error
-              ? `Interrupt API unavailable (${error.message}). Using demo replies.`
-              : "Interrupt API unavailable. Using demo replies.",
-          );
-        }
-      })();
-
-      return snapshot;
-    });
+      try {
+        const result = await interact({
+          sessionId: snap.sessionId,
+          message: question,
+          ...(snap.targetGuestId ? { targetGuestId: snap.targetGuestId } : {}),
+        });
+        if (!stillCurrent()) return;
+        const sources = { ...(snap.liveSources ?? {}) };
+        const joinLines = adaptInteractTurnsToJoinLines(
+          result.turns,
+          snap.guests,
+          sources,
+          result.session.sources,
+        );
+        await startJoined(
+          joinLines.length ? joinLines : null,
+          result.usedMockResearch
+            ? "Interrupt research used mock/fallback sources"
+            : "Panel answering your question",
+          Object.keys(sources).length ? sources : undefined,
+        );
+      } catch (error) {
+        if (!stillCurrent()) return;
+        console.warn("[Experience] interact failed:", error);
+        await startJoined(
+          null,
+          error instanceof Error
+            ? `Interrupt API unavailable (${error.message}). Using demo replies.`
+            : "Interrupt API unavailable. Using demo replies.",
+        );
+      }
+    })();
   };
 
   const handlers: ExperienceHandlers = {
@@ -441,95 +518,172 @@ export function Experience() {
       turnAudio.clear();
       lastSpokenKeyRef.current = null;
 
-      setState((prev) => {
-        const snapshot = prev;
-        void (async () => {
-          try {
-            const config = buildPodcastConfig({
-              topics: snapshot.topics,
-              region: snapshot.region,
-              language: snapshot.language,
-              durationMinutes: snapshot.duration,
-              depthLabel: snapshot.depth,
-              guestIds: snapshot.guests,
-              customGuests: snapshot.customGuests,
-            });
-            const { session } = await generatePodcast({ config });
-            const adapted = adaptSessionToExperience(session);
-            setState((current) => ({
-              ...current,
-              phase: "episode",
-              setupOpen: false,
-              playing: true,
-              t: 0,
-              k: 0,
-              mode: "listen",
-              joinN: 0,
-              found5: false,
-              openCite: null,
-              sessionId: adapted.sessionId,
-              liveScript: adapted.script,
-              liveSources: adapted.sources,
-              liveJoinLines: null,
-              note: adapted.usedMockNews
-                ? "Generated with mock/fallback news — sources labeled in notes"
-                : `Generated: ${adapted.title}`,
-              noteK: 0,
-            }));
-          } catch (error) {
-            const message =
-              error instanceof Error ? error.message : "Generation failed";
-            setState((current) => ({
-              ...current,
-              phase: "episode",
-              setupOpen: false,
-              playing: true,
-              t: 0,
-              k: 0,
-              mode: "listen",
-              joinN: 0,
-              found5: false,
-              openCite: null,
-              sessionId: null,
-              liveScript: DEMO_SCRIPT,
-              liveSources: DEMO_SOURCES,
-              liveJoinLines: null,
-              note: `API unavailable (${message}). Playing demo script.`,
-              noteK: 0,
-            }));
-          }
-        })();
+      // Never kick off async work inside a setState updater — React Strict Mode
+      // double-invokes updaters in dev, which was restarting generate mid-playback.
+      const epoch = ++generateEpochRef.current;
+      const snapshot = state;
+      const stillCurrent = () => generateEpochRef.current === epoch;
 
-        return {
-          ...prev,
-          phase: "generating",
-          setupOpen: false,
-          guestBuilderOpen: false,
-          k: 0,
-          t: 0,
-          mode: "listen",
-          playing: false,
-          joinN: 0,
-          found5: false,
-          openCite: null,
-          note: "Pulling news and writing the panel script…",
-          noteK: 0,
-          sessionId: null,
-          // Keep the previous script/sources in state while regenerating — the
-          // "generating" phase already hides the transcript on its own, but this
-          // way nothing ever briefly renders with a null/cleared script.
+      setState((prev) => ({
+        ...prev,
+        phase: "generating",
+        setupOpen: false,
+        guestBuilderOpen: false,
+        k: 0,
+        t: 0,
+        mode: "listen",
+        playing: false,
+        listenN: 0,
+        joinN: 0,
+        found5: false,
+        openCite: null,
+        note: "Pulling news and writing the panel script…",
+        noteK: 0,
+        sessionId: null,
+        liveScript: null,
+        liveSources: null,
+        liveJoinLines: null,
+      }));
+
+      void (async () => {
+        const startEpisode = async (
+          script: DemoScriptLine[],
+          sources: typeof DEMO_SOURCES,
+          sessionId: string | null,
+          note: string,
+        ) => {
+          if (!stillCurrent()) return;
+
+          setState((current) => ({
+            ...current,
+            phase: "generating",
+            playing: false,
+            liveScript: script,
+            liveSources: sources,
+            sessionId,
+            note: "Preparing voices for the full episode…",
+            noteK: 0,
+          }));
+
+          const lines = speakableFromScript(
+            script,
+            snapshot.guests,
+            snapshot.customGuests,
+            "L",
+          );
+          await turnAudio.preload(lines, {
+            concurrency: 3,
+            onProgress: (done, total) => {
+              if (!stillCurrent()) return;
+              setState((current) => ({
+                ...current,
+                note: `Preparing voices… ${done}/${total}`,
+                noteK: 0,
+              }));
+            },
+          });
+
+          if (!stillCurrent()) return;
+
+          lastSpokenKeyRef.current = null;
+          setState((current) => ({
+            ...current,
+            phase: "episode",
+            setupOpen: false,
+            playing: true,
+            t: 0,
+            k: 0,
+            mode: "listen",
+            listenN: 1,
+            joinN: 0,
+            found5: false,
+            openCite: null,
+            sessionId,
+            liveScript: script,
+            liveSources: sources,
+            liveJoinLines: null,
+            note,
+            noteK: 0,
+          }));
         };
-      });
+
+        try {
+          const config = buildPodcastConfig({
+            topics: snapshot.topics,
+            region: snapshot.region,
+            language: snapshot.language,
+            durationMinutes: snapshot.duration,
+            depthLabel: snapshot.depth,
+            guestIds: snapshot.guests,
+            customGuests: snapshot.customGuests,
+          });
+          const { session } = await generatePodcast({ config });
+          if (!stillCurrent()) return;
+          const adapted = adaptSessionToExperience(session);
+          await startEpisode(
+            adapted.script,
+            adapted.sources,
+            adapted.sessionId,
+            adapted.usedMockNews
+              ? "Generated with mock/fallback news — sources labeled in notes"
+              : `Generated: ${adapted.title}`,
+          );
+        } catch (error) {
+          if (!stillCurrent()) return;
+          const message =
+            error instanceof Error ? error.message : "Generation failed";
+          await startEpisode(
+            DEMO_SCRIPT,
+            DEMO_SOURCES,
+            null,
+            `API unavailable (${message}). Playing demo script.`,
+          );
+        }
+      })();
     },
-    seekTo: (seconds) => setState((prev) => ({ ...prev, t: seconds + 0.01, openCite: null })),
+    seekTo: (seconds) =>
+      setState((prev) => {
+        const t = seconds + 0.01;
+        const script = prev.liveScript ?? DEMO_SCRIPT;
+        const idx = Math.max(0, activeScriptIndex(script, t, prev.duration));
+        lastSpokenKeyRef.current = null;
+        return { ...prev, t, listenN: idx + 1, openCite: null };
+      }),
     seekFraction: (fraction) =>
-      setState((prev) => ({ ...prev, t: fraction * prev.duration * 60, openCite: null })),
-    back15: () => setState((prev) => ({ ...prev, t: Math.max(0, prev.t - 15) })),
-    fwd15: () => setState((prev) => ({ ...prev, t: Math.min(prev.duration * 60, prev.t + 15) })),
+      setState((prev) => {
+        const t = fraction * prev.duration * 60;
+        const script = prev.liveScript ?? DEMO_SCRIPT;
+        const idx = Math.max(0, activeScriptIndex(script, t, prev.duration));
+        lastSpokenKeyRef.current = null;
+        return { ...prev, t, listenN: idx + 1, openCite: null };
+      }),
+    back15: () =>
+      setState((prev) => {
+        const t = Math.max(0, prev.t - 15);
+        const script = prev.liveScript ?? DEMO_SCRIPT;
+        const idx = Math.max(0, activeScriptIndex(script, t, prev.duration));
+        lastSpokenKeyRef.current = null;
+        return { ...prev, t, listenN: idx + 1 };
+      }),
+    fwd15: () =>
+      setState((prev) => {
+        const t = Math.min(prev.duration * 60, prev.t + 15);
+        const script = prev.liveScript ?? DEMO_SCRIPT;
+        const idx = Math.max(0, activeScriptIndex(script, t, prev.duration));
+        lastSpokenKeyRef.current = null;
+        return { ...prev, t, listenN: idx + 1 };
+      }),
     togglePlay: () =>
       setState((prev) => {
         const total = prev.duration * 60;
-        if (prev.t >= total) return { ...prev, t: 0, playing: true };
+        if (prev.t >= total) {
+          lastSpokenKeyRef.current = null;
+          return { ...prev, t: 0, listenN: 1, playing: true };
+        }
+        if (!prev.playing) {
+          // Resume must re-speak — exhausted clips ignore play().
+          lastSpokenKeyRef.current = null;
+        }
         return { ...prev, playing: !prev.playing };
       }),
     setDraft: (value) => setState((prev) => ({ ...prev, draft: value })),
@@ -629,10 +783,15 @@ export function Experience() {
         setState((prev) => {
           const chapters = getChapters(prev.duration);
           const fifth = chapters[4];
+          const t = fifth.s + 0.01;
+          const script = prev.liveScript ?? DEMO_SCRIPT;
+          const idx = Math.max(0, activeScriptIndex(script, t, prev.duration));
+          lastSpokenKeyRef.current = null;
           return {
             ...prev,
             mode: "listen",
-            t: fifth.s + 0.01,
+            t,
+            listenN: idx + 1,
             playing: true,
             joinN: 0,
             question: "",

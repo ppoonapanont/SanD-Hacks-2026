@@ -15,52 +15,55 @@ export interface SpeakableLine {
   speakerName: string;
 }
 
+function cacheKey(line: SpeakableLine): string {
+  // Include text + voice so a reused turnId never plays the wrong words.
+  return `${line.turnId}::${line.voiceId}::${line.text}`;
+}
+
 /**
  * Generates ElevenLabs audio for a conversation turn (via POST /api/audio/generate)
  * and plays it exclusively so the audible clip always matches the active transcript line.
  *
- * Late TTS responses for a previous line are dropped (generation token).
+ * Prefer `preload` before playback so TTS finishes before the episode starts.
  * Prefetch only warms the cache — it never starts playback.
  */
 export function useTurnAudio() {
   const audioQueue = useAudioQueue();
   const cacheRef = useRef<Map<string, string>>(new Map());
-  const pendingRef = useRef<Set<string>>(new Set());
+  const pendingRef = useRef<Map<string, Promise<string | null>>>(new Map());
   const onSpeakFailedRef = useRef<((turnId: string) => void) | null>(null);
   /** Only the latest speak() call may start playback. */
   const speakGenerationRef = useRef(0);
   const desiredTurnRef = useRef<string | null>(null);
 
   const generateAndCache = useCallback(async (line: SpeakableLine): Promise<string | null> => {
-    const cached = cacheRef.current.get(line.turnId);
+    const key = cacheKey(line);
+    const cached = cacheRef.current.get(key);
     if (cached) return cached;
     if (!line.voiceId?.trim() || !line.text?.trim()) return null;
 
-    if (pendingRef.current.has(line.turnId)) {
-      for (let i = 0; i < 40; i++) {
-        await new Promise((r) => setTimeout(r, 250));
-        const ready = cacheRef.current.get(line.turnId);
-        if (ready) return ready;
-        if (!pendingRef.current.has(line.turnId)) break;
-      }
-      return cacheRef.current.get(line.turnId) ?? null;
-    }
+    const inflight = pendingRef.current.get(key);
+    if (inflight) return inflight;
 
-    pendingRef.current.add(line.turnId);
-    try {
-      const response = await generateAudio({
-        text: line.text,
-        voiceId: line.voiceId,
-        turnId: line.turnId,
-      });
-      cacheRef.current.set(line.turnId, response.audioUrl);
-      return response.audioUrl;
-    } catch (error: unknown) {
-      console.warn(`[useTurnAudio] audio generation skipped for "${line.turnId}":`, error);
-      return null;
-    } finally {
-      pendingRef.current.delete(line.turnId);
-    }
+    const promise = (async () => {
+      try {
+        const response = await generateAudio({
+          text: line.text,
+          voiceId: line.voiceId,
+          turnId: line.turnId,
+        });
+        cacheRef.current.set(key, response.audioUrl);
+        return response.audioUrl;
+      } catch (error: unknown) {
+        console.warn(`[useTurnAudio] audio generation skipped for "${line.turnId}":`, error);
+        return null;
+      } finally {
+        pendingRef.current.delete(key);
+      }
+    })();
+
+    pendingRef.current.set(key, promise);
+    return promise;
   }, []);
 
   const speak = useCallback(
@@ -105,6 +108,40 @@ export function useTurnAudio() {
     [generateAndCache],
   );
 
+  /**
+   * Block until every line has TTS (or has failed). Call this during the
+   * generating phase so playback never waits mid-episode for ElevenLabs.
+   */
+  const preload = useCallback(
+    async (
+      lines: SpeakableLine[],
+      options?: { concurrency?: number; onProgress?: (done: number, total: number) => void },
+    ): Promise<{ ready: number; failed: number }> => {
+      const concurrency = Math.max(1, options?.concurrency ?? 3);
+      let done = 0;
+      let ready = 0;
+      let failed = 0;
+      const total = lines.length;
+      const queue = [...lines];
+
+      const worker = async () => {
+        while (queue.length) {
+          const line = queue.shift();
+          if (!line) break;
+          const url = await generateAndCache(line);
+          if (url) ready += 1;
+          else failed += 1;
+          done += 1;
+          options?.onProgress?.(done, total);
+        }
+      };
+
+      await Promise.all(Array.from({ length: Math.min(concurrency, total || 1) }, () => worker()));
+      return { ready, failed };
+    },
+    [generateAndCache],
+  );
+
   const clear = useCallback(() => {
     speakGenerationRef.current += 1;
     desiredTurnRef.current = null;
@@ -129,12 +166,21 @@ export function useTurnAudio() {
     });
   }, [audioQueue]);
 
+  const setOnTimeUpdate = useCallback(
+    (cb: ((info: { turnId: string; currentTime: number; duration: number }) => void) | null) => {
+      audioQueue.setOnTimeUpdate(cb);
+    },
+    [audioQueue],
+  );
+
   return {
     ...audioQueue,
     speak,
     prefetch,
+    preload,
     clear,
     setOnSpeakFailed,
     setOnClipEnded,
+    setOnTimeUpdate,
   };
 }

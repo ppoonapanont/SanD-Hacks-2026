@@ -35,6 +35,11 @@ export interface ExperienceState {
   /** Generic step counter used by the generating/voice/research/joined tickers. */
   k: number;
   step: number;
+  /**
+   * Listen mode: how many script lines are revealed (1-based).
+   * Current spoken line is `listenN - 1`. Keeps transcript locked while a clip plays.
+   */
+  listenN: number;
   joinN: number;
   draft: string;
   openCite: string | null;
@@ -67,6 +72,7 @@ export const BASE_STATE: ExperienceState = {
   mode: "listen",
   k: 0,
   step: 0,
+  listenN: 0,
   joinN: 0,
   draft: "",
   openCite: null,
