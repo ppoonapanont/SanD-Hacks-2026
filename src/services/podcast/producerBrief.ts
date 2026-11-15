@@ -75,6 +75,9 @@ export async function runProducerBrief(
         "",
         "Return a tight producer brief: working title, 3–5 ordered segments with guest focus,",
         "cold-open hook, and closing beat. You may call research-news only if a gap is critical.",
+        "",
+        "The cold-open hook MUST name a concrete news story from the sources (headline-level),",
+        "not a category chip like 'Business' or 'Technology'. Example: welcome listeners into the actual event.",
       ].join("\n"),
       { maxSteps: 3 },
     );

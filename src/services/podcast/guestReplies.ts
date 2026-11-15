@@ -3,7 +3,8 @@ import { generateJson, isGeminiConfigured } from "@/services/gemini";
 import type { Guest, NewsSource } from "@/types";
 
 import { hostDisplayName } from "./guestMap";
-import { sanitizeHostSpokenLine, stripCitationMarkers } from "./hostLines";
+import { sanitizeHostSpokenLine } from "./hostLines";
+import { finalizeSpokenLine } from "./spokenText";
 
 export interface StructuredGuestReply {
   guestId: string;
@@ -202,12 +203,12 @@ export async function runGuestReplies(input: {
     for (const reply of structured.replies ?? []) {
       const guestId = String(reply.guestId);
       if (!guestIds.has(guestId) || used.has(guestId)) continue;
-      const text = stripCitationMarkers(String(reply.text ?? "").trim());
+      const text = String(reply.text ?? "").trim();
       if (!text) continue;
       used.add(guestId);
       replies.push({
         guestId,
-        text,
+        text: finalizeSpokenLine(text, text),
         sourceIndexes: (reply.sourceIndexes ?? [])
           .map((n) => Number(n))
           .filter((n) => Number.isFinite(n) && n >= 1 && n <= researchSources.length),
@@ -217,10 +218,11 @@ export async function runGuestReplies(input: {
     // Ensure every responder has a line (prefer raw agent text over heuristic).
     for (const guest of responders) {
       if (used.has(guest.id)) continue;
-      const raw = stripCitationMarkers(rawByGuest.get(guest.id)?.trim() ?? "");
+      const raw = rawByGuest.get(guest.id)?.trim();
+      const fallback = fallbackReply(guest, message);
       replies.push({
         guestId: guest.id,
-        text: raw || fallbackReply(guest, message),
+        text: raw ? finalizeSpokenLine(raw, fallback) : fallback,
         sourceIndexes: [],
       });
       used.add(guest.id);
@@ -249,13 +251,15 @@ export async function runGuestReplies(input: {
         : "Guest structure failed",
     );
     return {
-      replies: responders.map((guest) => ({
-        guestId: guest.id,
-        text:
-          stripCitationMarkers(rawByGuest.get(guest.id)?.trim() ?? "") ||
-          fallbackReply(guest, message),
-        sourceIndexes: [],
-      })),
+      replies: responders.map((guest) => {
+        const raw = rawByGuest.get(guest.id)?.trim();
+        const fallback = fallbackReply(guest, message);
+        return {
+          guestId: guest.id,
+          text: raw ? finalizeSpokenLine(raw, fallback) : fallback,
+          sourceIndexes: [],
+        };
+      }),
       closingHost: defaultClosing(hostName),
       guestsUsed: agentsOk > 0,
       summary:

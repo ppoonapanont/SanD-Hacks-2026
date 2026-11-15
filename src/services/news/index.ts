@@ -124,6 +124,30 @@ export async function fetchNewsForConfig(
   }
 
   if (collected.length === 0) {
+    // One more full pass — Bright Data SERP intermittently returns empty bodies.
+    for (const topic of params.topics) {
+      const query = buildNewsQuery(topic, params.region);
+      try {
+        const hits = await searchNews({
+          query,
+          region: params.region,
+          language: params.language,
+          limit: perTopic,
+        });
+        collected.push(...hits.map(mapHitToNewsSource));
+      } catch (error) {
+        const message =
+          error instanceof BrightDataError
+            ? error.message
+            : error instanceof Error
+              ? error.message
+              : "Unknown Bright Data error";
+        errors.push(`Retry news search for "${topic}": ${message}`);
+      }
+    }
+  }
+
+  if (collected.length === 0) {
     const sources = enrichSourcesWithClaims(MOCK_NEWS_SOURCES);
     const crossReferences = await crossReferenceSources(sources);
 
@@ -134,7 +158,7 @@ export async function fetchNewsForConfig(
       crossReferences,
       errors: [
         ...errors,
-        "No live news results; falling back to mock news",
+        "No live news results from Bright Data; falling back to mock news",
       ],
       enrichment: {
         enrichedCount: 0,

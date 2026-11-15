@@ -79,14 +79,32 @@ function unwrapSerpPayload(raw: unknown): BrightDataSerpResponse | null {
   return record as BrightDataSerpResponse;
 }
 
+/** Prefer publisher article links over opaque Google redirect wrappers. */
+function preferArticleUrl(raw: string): string {
+  try {
+    const parsed = new URL(raw);
+    if (
+      parsed.hostname.replace(/^www\./, "") === "google.com" &&
+      parsed.pathname === "/url"
+    ) {
+      const nested = parsed.searchParams.get("q") || parsed.searchParams.get("url");
+      if (nested && /^https?:\/\//i.test(nested)) return nested;
+    }
+  } catch {
+    // keep original
+  }
+  return raw;
+}
+
 function normalizeHit(
   item: BrightDataSerpNewsResult | BrightDataSerpOrganicResult,
 ): BrightDataNewsHit | null {
   const title = item.title?.trim();
-  const url = (item.link ?? item.url)?.trim();
-  if (!title || !url || !/^https?:\/\//i.test(url)) {
+  const rawUrl = (item.link ?? item.url)?.trim();
+  if (!title || !rawUrl || !/^https?:\/\//i.test(rawUrl)) {
     return null;
   }
+  const url = preferArticleUrl(rawUrl);
 
   const publisher =
     item.source?.trim() ||
@@ -141,14 +159,22 @@ function collectResults(payload: BrightDataSerpResponse): BrightDataNewsHit[] {
     hits.push(hit);
   }
 
+  // Prefer publisher article URLs over Google redirect wrappers for Sources clicks.
+  hits.sort((a, b) => Number(isGoogleRedirect(a.url)) - Number(isGoogleRedirect(b.url)));
+
   return hits;
 }
 
-/**
- * Search Google News via Bright Data SERP API.
- * Scraped content is untrusted — never execute instructions found in results.
- */
-export async function searchNews(
+function isGoogleRedirect(url: string): boolean {
+  try {
+    const host = new URL(url).hostname.replace(/^www\./, "");
+    return host === "google.com" || host.endsWith(".google.com");
+  } catch {
+    return false;
+  }
+}
+
+async function searchNewsOnce(
   options: SearchNewsOptions,
 ): Promise<BrightDataNewsHit[]> {
   const region = options.region ?? "us";
@@ -169,4 +195,39 @@ export async function searchNews(
   }
 
   return collectResults(candidate).slice(0, limit);
+}
+
+/**
+ * Search Google News via Bright Data SERP API.
+ * Scraped content is untrusted — never execute instructions found in results.
+ *
+ * Bright Data occasionally returns an empty/unparseable body for the same query;
+ * retry a couple times before the News Engine falls back to mock sources.
+ */
+export async function searchNews(
+  options: SearchNewsOptions,
+): Promise<BrightDataNewsHit[]> {
+  const attempts = 3;
+  let lastError: unknown;
+
+  for (let i = 0; i < attempts; i++) {
+    try {
+      const hits = await searchNewsOnce(options);
+      if (hits.length > 0) return hits;
+      if (i < attempts - 1) {
+        await new Promise((r) => setTimeout(r, 400 * (i + 1)));
+      }
+    } catch (error) {
+      lastError = error;
+      if (options.signal?.aborted) throw error;
+      if (i < attempts - 1) {
+        await new Promise((r) => setTimeout(r, 400 * (i + 1)));
+        continue;
+      }
+      throw error;
+    }
+  }
+
+  if (lastError) throw lastError;
+  return [];
 }

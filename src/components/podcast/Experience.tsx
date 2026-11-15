@@ -1172,7 +1172,13 @@ export function Experience() {
     togglePlay: () =>
       setState((prev) => {
         const total = prev.duration * 60;
-        if (prev.t >= total) {
+        // Restart-from-zero is only for pressing play at the true end — never for
+        // pause. Live episodes often keep speaking past durationMinutes, so a mid
+        // "pause" was resetting listenN to 1 and playing from the cold open.
+        const atTrueEnd =
+          prev.t >= total &&
+          (!prev.liveGeneration || prev.liveComplete);
+        if (!prev.playing && atTrueEnd) {
           lastSpokenKeyRef.current = null;
           return { ...prev, t: 0, listenN: 1, playing: true };
         }
