@@ -7,5 +7,5 @@ export function getMastraGeminiModel(): `${string}/${string}` {
   if (raw?.includes("/")) return raw as `${string}/${string}`;
   if (raw) return `google/${raw}` as `${string}/${string}`;
   // Keep in sync with `src/services/gemini/client.ts` DEFAULT_MODEL.
-  return "google/gemini-3.5-flash-lite";
+  return "google/gemini-3.1-flash-lite";
 }

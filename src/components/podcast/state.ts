@@ -53,6 +53,10 @@ export interface ExperienceState {
   liveSources: Record<number, DemoSource> | null;
   /** Live interrupt replies from /api/podcast/interact; null uses DEMO_JOIN_LINES. */
   liveJoinLines: DemoJoinLine[] | null;
+  /** When true, Experience fetches more lines via POST /next while listening. */
+  liveGeneration: boolean;
+  /** Live episode has no more turns to fetch. */
+  liveComplete: boolean;
 }
 
 export const BASE_STATE: ExperienceState = {
@@ -84,6 +88,8 @@ export const BASE_STATE: ExperienceState = {
   liveScript: null,
   liveSources: null,
   liveJoinLines: null,
+  liveGeneration: false,
+  liveComplete: false,
 };
 
 export interface Chapter {

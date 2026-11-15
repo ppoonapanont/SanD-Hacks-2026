@@ -81,7 +81,7 @@ When adding Mastra-driven prep/live `/next`, branch from or compare against **v1
 
 | Item | Status | Location / notes |
 |------|--------|------------------|
-| Mastra agents and workflows | PARTIAL | **v1+:** research + **Producer** (`/generate` brief) + **Moderator** (`/interact` routing) + **Guest agents** (per-panelist interrupt replies); live `/next` still post-v1 |
+| Mastra agents and workflows | PARTIAL | **v1+:** research + **Producer** + **Moderator** + **Guest agents**; Experience uses **live `/next`** turn-by-turn (`generationMode: "live"`) with full-script generate still available |
 | Moderator logic | COMPLETE | Mastra Moderator plans who answers + research need in `moderatorPlan.ts` / `interact.ts` |
 | Guest agent coordination | COMPLETE | Mastra Guest agents (`createGuestAgent`) reply in character on interrupt; targetGuestId supported |
 | User question handling | COMPLETE | `/api/podcast/interact` + Experience `beginInterrupt` (demo fallback) |

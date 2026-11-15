@@ -15,13 +15,15 @@ export function PlayerCard({ view, handlers }: PlayerCardProps) {
   const transcriptRef = useRef<HTMLDivElement | null>(null);
   const lastLineKey = view.lines[view.lines.length - 1]?.key ?? null;
 
-  // Auto-scroll to the newest content — but only when something actually new
-  // arrived (new line, new join reply, a mode change), not on every tick,
-  // so it doesn't fight a user who scrolled up to reread earlier lines.
+  // Auto-scroll to the newest content when something new arrives — but only if
+  // the user is already near the bottom, so scrollback through earlier lines works.
   useEffect(() => {
     const el = transcriptRef.current;
     if (!el) return;
-    el.scrollTop = el.scrollHeight;
+    const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
+    if (distanceFromBottom < 96) {
+      el.scrollTop = el.scrollHeight;
+    }
   }, [lastLineKey, view.joinLines.length, view.isResearch, view.showQuestion, view.hasNote]);
 
   return (

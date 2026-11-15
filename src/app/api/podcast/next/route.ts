@@ -1,14 +1,16 @@
 import { NextResponse } from "next/server";
 
 import { getSession, updateSession } from "@/lib/sessions";
+import { advancePodcastTurn } from "@/services/podcast/nextTurn";
 import type { NextTurnRequest, NextTurnResponse } from "@/types";
 
-/** In-memory turn cursor per session for MVP /next advancement. */
+/** In-memory turn cursor per session for precomputed (script) /next advancement. */
 const nextTurnCursors = new Map<string, number>();
 
 /**
  * POST /api/podcast/next
- * Developer 1 — returns the next precomputed turn for a session.
+ * - live sessions: Moderator + Guest/Host generate the next turn
+ * - script sessions: walk precomputed turns (v1)
  */
 export async function POST(request: Request) {
   let body: NextTurnRequest;
@@ -29,6 +31,44 @@ export async function POST(request: Request) {
   const session = getSession(body.sessionId);
   if (!session) {
     return NextResponse.json({ error: "Podcast not found" }, { status: 404 });
+  }
+
+  if (session.generationMode === "live") {
+    try {
+      const result = await advancePodcastTurn(body.sessionId);
+      if (result.done && !result.generated) {
+        return NextResponse.json(
+          {
+            error: "Episode complete",
+            code: "COMPLETED",
+            session: result.session,
+          },
+          { status: 409 },
+        );
+      }
+      if (result.errors.length) {
+        console.warn("[podcast/next]", result.errors.join("; "));
+      }
+      const response: NextTurnResponse = {
+        session: result.session,
+        turn: result.turn,
+        generated: result.generated,
+        done: result.done,
+        ...(result.errors.length ? { errors: result.errors } : {}),
+      };
+      return NextResponse.json(response);
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Next turn generation failed";
+      const status = message === "Podcast not found" ? 404 : 500;
+      return NextResponse.json(
+        {
+          error: message,
+          code: status === 404 ? "NOT_FOUND" : "NEXT_FAILED",
+        },
+        { status },
+      );
+    }
   }
 
   const cursor = nextTurnCursors.get(body.sessionId) ?? 0;
@@ -60,6 +100,8 @@ export async function POST(request: Request) {
   const response: NextTurnResponse = {
     session: updated,
     turn,
+    generated: false,
+    done: cursor + 1 >= session.turns.length,
   };
   return NextResponse.json(response);
 }

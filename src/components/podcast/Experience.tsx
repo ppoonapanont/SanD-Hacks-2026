@@ -17,6 +17,7 @@ import { useTurnAudio } from "@/hooks";
 import {
   generatePodcast,
   interact,
+  nextTurn,
   resumePodcast,
   transcribeAudio,
 } from "@/lib/api/client";
@@ -29,8 +30,11 @@ import {
 import {
   adaptInteractTurnsToJoinLines,
   adaptSessionToExperience,
+  adaptTurnToScriptLine,
 } from "@/services/podcast/adaptToExperience";
 import { buildPodcastConfig } from "@/services/podcast/guestMap";
+import { estimateSpeechSeconds } from "@/services/podcast/speechTiming";
+import type { NewsSource } from "@/types";
 import { formatSeconds } from "@/utils/time";
 
 import { ChaptersPanel } from "./ChaptersPanel";
@@ -75,10 +79,14 @@ function activeScriptIndex(
   script: DemoScriptLine[],
   t: number,
   durationMinutes: number,
+  liveGeneration = false,
 ): number {
   let best = -1;
   for (let i = 0; i < script.length; i++) {
-    if (scaleT(script[i].t, durationMinutes) <= t + 0.001) best = i;
+    const lineStart = liveGeneration
+      ? script[i].t
+      : scaleT(script[i].t, durationMinutes);
+    if (lineStart <= t + 0.001) best = i;
   }
   return best;
 }
@@ -100,6 +108,10 @@ function advanceListenPastTurn(
 
   const next = script[idx + 1];
   if (!next) {
+    // Live mode may still be generating the next line — keep the session alive.
+    if (prev.liveGeneration && !prev.liveComplete) {
+      return prev;
+    }
     return { ...prev, playing: false };
   }
   // Keep real elapsed clock continuous — do not jump to script baseline timestamps.
@@ -273,6 +285,15 @@ export function Experience() {
   const pendingSeekSecondsRef = useRef<number | null>(null);
   /** Blocks stacked ±15 from double-clicks / Strict Mode side-effect duplication. */
   const skipLockRef = useRef(false);
+  /** Prevents overlapping POST /next prefetch calls in live mode. */
+  const nextFetchLockRef = useRef(false);
+  /** Session sources for adapting live /next turns into script lines. */
+  const sessionSourcesRef = useRef<NewsSource[]>([]);
+  /**
+   * Cumulative spoken seconds for live transcript labels (measured TTS duration
+   * when available — not wall-clock waits for /next generation).
+   */
+  const speechElapsedRef = useRef(0);
   const stateRef = useRef(state);
   // Read by useTurnAudio once a (possibly async) clip is actually ready, so a generation
   // request that resolves after the user hits pause doesn't force playback back on.
@@ -323,7 +344,33 @@ export function Experience() {
 
   // Sync transcript → next speaker when the *active* line's clip finishes or TTS fails.
   useEffect(() => {
+    const syncSpeechElapsed = (turnId: string) => {
+      if (!stateRef.current.liveGeneration) return;
+      // Prefer the live scrubber (anchor + currentTime). Falling back to measured
+      // duration avoids drifting a parallel timeline that rewinds the clock.
+      const { currentTime, duration } = turnAudio.getPlaybackPosition();
+      const fromClock = stateRef.current.t;
+      const fromAudio =
+        duration > 0.5
+          ? lineClockAnchorRef.current + Math.min(currentTime || duration, duration)
+          : null;
+      const match = /^L(\d+)$/.exec(turnId);
+      const idx = match ? Number(match[1]) : -1;
+      const line = idx >= 0 ? stateRef.current.liveScript?.[idx] : null;
+      const fromEstimate =
+        line != null
+          ? (typeof line.t === "number" ? line.t : 0) +
+            estimateSpeechSeconds(line.x)
+          : fromClock;
+      speechElapsedRef.current = Math.max(
+        fromClock,
+        fromAudio ?? 0,
+        fromEstimate,
+        speechElapsedRef.current,
+      );
+    };
     const advance = (turnId: string) => {
+      syncSpeechElapsed(turnId);
       setState((prev) => advancePastSpokenTurn(prev, turnId));
     };
     turnAudio.setOnClipEnded(advance);
@@ -360,10 +407,18 @@ export function Experience() {
       activeLineKey === lastSpokenKeyRef.current &&
       turnAudio.isClipExhausted()
     ) {
+      // Live /next still writing the next line — don't kill playback while buffering.
+      if (state.liveGeneration && !state.liveComplete) {
+        const script = stateRef.current.liveScript ?? [];
+        if (stateRef.current.listenN >= script.length) {
+          return;
+        }
+      }
       const finishedKey = activeLineKey;
       setState((prev) => {
         const next = advancePastSpokenTurn(prev, finishedKey);
         if (next !== prev) return next;
+        if (prev.liveGeneration && !prev.liveComplete) return prev;
         return prev.playing ? { ...prev, playing: false } : prev;
       });
       return;
@@ -394,7 +449,7 @@ export function Experience() {
     }
 
     // Only start TTS when the active line changes — never replay an exhausted clip.
-    if (activeLine && activeLineKey !== lastSpokenKeyRef.current) {
+    if (activeLine && activeLineKey && activeLineKey !== lastSpokenKeyRef.current) {
       lastSpokenKeyRef.current = activeLineKey;
       // Use live state — effect closures can still see pre-skip `t`.
       const clockT = stateRef.current.t;
@@ -414,9 +469,29 @@ export function Experience() {
           : pending >= 0
             ? pending
             : 0;
-      lineClockAnchorRef.current = Math.max(0, clockT - startOffset);
+      // Always continue the scrubber from the current clock — never rewind to a
+      // parallel speechElapsed estimate (that made the UI jump back on each new line).
+      const anchor = Math.max(0, clockT - startOffset);
+      lineClockAnchorRef.current = anchor;
       if (keepOffset != null && pending == null) {
         pendingSeekSecondsRef.current = keepOffset;
+      }
+
+      // Live labels: stamp the line's *start* with the scrubber time at speak.
+      if (stateRef.current.liveGeneration) {
+        const match = /^L(\d+)$/.exec(activeLineKey);
+        const idx = match ? Number(match[1]) : -1;
+        if (idx >= 0) {
+          speechElapsedRef.current = Math.max(speechElapsedRef.current, anchor);
+          setState((prev) => {
+            const script = prev.liveScript;
+            if (!script?.[idx]) return prev;
+            if (Math.abs(script[idx].t - anchor) < 0.35) return prev;
+            const next = script.slice();
+            next[idx] = { ...next[idx], t: anchor };
+            return { ...prev, liveScript: next };
+          });
+        }
       }
 
       turnAudio.speak(
@@ -457,8 +532,17 @@ export function Experience() {
         }
       }
     }
+    // liveScript length: when a buffered /next line arrives after a clip ended, advance.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isSpeakingPhase, state.mode, state.playing, activeLineKey]);
+  }, [
+    isSpeakingPhase,
+    state.mode,
+    state.playing,
+    activeLineKey,
+    state.liveScript?.length,
+    state.liveGeneration,
+    state.liveComplete,
+  ]);
 
   // Drive the scrubber 1:1 with real audio seconds (not stretched script gaps).
   useEffect(() => {
@@ -534,6 +618,120 @@ export function Experience() {
     state.guests,
     state.customGuests,
     view.isEpisode,
+  ]);
+
+  // Live mode: keep ~2 lines ahead via POST /next so Gemini+TTS can finish while
+  // the current clip plays (1-line buffer routinely stalled between turns).
+  useEffect(() => {
+    if (
+      !view.isEpisode ||
+      !state.liveGeneration ||
+      state.liveComplete ||
+      !state.sessionId ||
+      state.mode !== "listen" ||
+      !state.playing
+    ) {
+      return;
+    }
+    const script = state.liveScript;
+    if (!script?.length) return;
+    // length - listenN == lines after the active one.
+    if (script.length - state.listenN >= 2) return;
+    if (nextFetchLockRef.current) return;
+
+    const sessionId = state.sessionId;
+    const guests = state.guests;
+    const customGuests = state.customGuests;
+    nextFetchLockRef.current = true;
+
+    void (async () => {
+      try {
+        const result = await nextTurn({ sessionId });
+        const line = adaptTurnToScriptLine(
+          result.turn,
+          guests,
+          sessionSourcesRef.current,
+        );
+        if (line) {
+          const idx = result.session.turns.length - 1;
+          const profile = profileForGuestSlot(guests, customGuests, line.s);
+          // Append text immediately so playback can advance; warm TTS in parallel.
+          const speakable = {
+            turnId: `L${idx}`,
+            text: line.x,
+            voiceId: profile.voiceId,
+            speakerId: `L${idx}`,
+            speakerName: profile.name,
+          };
+          void turnAudio.preload([speakable], { concurrency: 1 });
+          // Only start the new line if the current clip already finished. Never bump
+          // listenN while audio is still playing — that was cutting off the prior turn.
+          const currentFinished = turnAudio.isClipExhausted();
+          const waitingAtEnd =
+            currentFinished &&
+            stateRef.current.listenN >= (stateRef.current.liveScript?.length ?? 0);
+          if (waitingAtEnd) {
+            lastSpokenKeyRef.current = null;
+          }
+          if (result.errors?.length) {
+            console.warn("[Experience] live /next soft errors:", result.errors);
+          }
+          setState((prev) => {
+            if (prev.sessionId !== sessionId || prev.mode !== "listen") return prev;
+            const prevScript = prev.liveScript ?? [];
+            // Avoid duplicating if Strict Mode / overlap already appended.
+            if (prevScript.length >= result.session.turns.length) {
+              return {
+                ...prev,
+                liveComplete: Boolean(result.done),
+              };
+            }
+            const shouldStartNow =
+              currentFinished && prev.listenN >= prevScript.length;
+            // Provisional start = current scrubber (refined to exact start on speak).
+            // Do not use server estimate timestamps — they drift ahead of real audio.
+            const stamped = {
+              ...line,
+              t: Math.max(prev.t, speechElapsedRef.current),
+            };
+            const fallbackNote = result.errors?.length
+              ? `Live fallback: ${result.turn.speakerName} (model quota?)`
+              : result.generated
+                ? `Live next: ${result.turn.speakerName}`
+                : prev.note;
+            return {
+              ...prev,
+              liveScript: [...prevScript, stamped],
+              listenN: shouldStartNow ? prev.listenN + 1 : prev.listenN,
+              note: fallbackNote,
+              noteK: 0,
+              liveComplete: Boolean(result.done),
+            };
+          });
+        } else if (result.done) {
+          setState((prev) => ({ ...prev, liveComplete: true }));
+        }
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "";
+        if (message.toLowerCase().includes("complete")) {
+          setState((prev) => ({ ...prev, liveComplete: true }));
+        } else {
+          console.warn("[Experience] live /next failed:", error);
+        }
+      } finally {
+        nextFetchLockRef.current = false;
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    view.isEpisode,
+    state.liveGeneration,
+    state.liveComplete,
+    state.sessionId,
+    state.mode,
+    state.playing,
+    state.listenN,
+    state.liveScript?.length,
   ]);
 
   // Stall fallback: only if TTS never starts for this line (not while audio plays).
@@ -749,7 +947,12 @@ export function Experience() {
         liveScript: null,
         liveSources: null,
         liveJoinLines: null,
+        liveGeneration: false,
+        liveComplete: false,
       }));
+      sessionSourcesRef.current = [];
+      nextFetchLockRef.current = false;
+      speechElapsedRef.current = 0;
 
       void (async () => {
         const startEpisode = async (
@@ -757,8 +960,10 @@ export function Experience() {
           sources: typeof DEMO_SOURCES,
           sessionId: string | null,
           note: string,
+          options?: { live?: boolean },
         ) => {
           if (!stillCurrent()) return;
+          const live = Boolean(options?.live);
 
           setState((current) => ({
             ...current,
@@ -767,7 +972,11 @@ export function Experience() {
             liveScript: script,
             liveSources: sources,
             sessionId,
-            note: "Preparing voices for the full episode…",
+            liveGeneration: live,
+            liveComplete: false,
+            note: live
+              ? "Preparing opening voice…"
+              : "Preparing voices for the full episode…",
             noteK: 0,
           }));
 
@@ -811,6 +1020,8 @@ export function Experience() {
             liveScript: script,
             liveSources: sources,
             liveJoinLines: null,
+            liveGeneration: live,
+            liveComplete: false,
             note,
             noteK: 0,
           }));
@@ -826,11 +1037,14 @@ export function Experience() {
             guestIds: snapshot.guests,
             customGuests: snapshot.customGuests,
           });
-          const { session, producerUsed, producerSummary, usedMockNews } =
-            await generatePodcast({ config });
+          // Live turn-by-turn: Producer outline + seed, then /next while playing.
+          const { session, producerUsed, producerSummary, usedMockNews, live } =
+            await generatePodcast({ config, live: true });
           if (!stillCurrent()) return;
+          sessionSourcesRef.current = session.sources ?? [];
           const adapted = adaptSessionToExperience(session, { usedMockNews });
           const noteParts = [
+            live ? "Live turn-by-turn" : null,
             producerUsed
               ? `Producer: ${producerSummary ?? adapted.title}`
               : `Generated: ${adapted.title}`,
@@ -843,6 +1057,7 @@ export function Experience() {
             adapted.sources,
             adapted.sessionId,
             noteParts.join(" · "),
+            { live: Boolean(live ?? session.generationMode === "live") },
           );
         } catch (error) {
           if (!stillCurrent()) return;
@@ -853,6 +1068,7 @@ export function Experience() {
             DEMO_SOURCES,
             null,
             `API unavailable (${message}). Playing demo script.`,
+            { live: false },
           );
         }
       })();
@@ -861,7 +1077,10 @@ export function Experience() {
       const prev = stateRef.current;
       const script = prev.liveScript ?? DEMO_SCRIPT;
       const clampedT = Math.max(0, Math.min(prev.duration * 60, seconds + 0.01));
-      const idx = Math.max(0, activeScriptIndex(script, clampedT, prev.duration));
+      const idx = Math.max(
+        0,
+        activeScriptIndex(script, clampedT, prev.duration, prev.liveGeneration),
+      );
       seekIgnoreUntilRef.current = Date.now() + 400;
       pendingSeekSecondsRef.current = null;
       lastSpokenKeyRef.current = null;
@@ -880,7 +1099,10 @@ export function Experience() {
         Math.min(prev.duration * 60, fraction * prev.duration * 60),
       );
       const script = prev.liveScript ?? DEMO_SCRIPT;
-      const idx = Math.max(0, activeScriptIndex(script, clampedT, prev.duration));
+      const idx = Math.max(
+        0,
+        activeScriptIndex(script, clampedT, prev.duration, prev.liveGeneration),
+      );
       seekIgnoreUntilRef.current = Date.now() + 400;
       pendingSeekSecondsRef.current = null;
       lastSpokenKeyRef.current = null;
@@ -954,10 +1176,16 @@ export function Experience() {
         if (!prev.playing) {
           // Resume in place when the active clip is still loaded. Clearing
           // lastSpokenKey forced speak() → playExclusive(), which rewound
-          // audio/clock after ±15 while paused.
-          const idx = prev.listenN - 1;
+          // audio/clock after ±15 while paused — and for joined clips with the
+          // same src, playExclusive could disarm without re-arming (stuck mute).
+          const listenIdx = prev.listenN - 1;
+          const joinIdx = prev.joinN - 1;
           const activeKey =
-            prev.mode === "listen" && idx >= 0 ? `L${idx}` : null;
+            prev.mode === "listen" && listenIdx >= 0
+              ? `L${listenIdx}`
+              : prev.mode === "joined" && joinIdx >= 0
+                ? `J${joinIdx}`
+                : null;
           const canResumeInPlace =
             activeKey != null &&
             turnAudio.current?.turnId === activeKey &&
@@ -1067,7 +1295,10 @@ export function Experience() {
           const fifth = chapters[4];
           const t = fifth.s + 0.01;
           const script = prev.liveScript ?? DEMO_SCRIPT;
-          const idx = Math.max(0, activeScriptIndex(script, t, prev.duration));
+          const idx = Math.max(
+            0,
+            activeScriptIndex(script, t, prev.duration, prev.liveGeneration),
+          );
           lastSpokenKeyRef.current = null;
           return {
             ...prev,

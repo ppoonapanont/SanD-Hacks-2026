@@ -11,10 +11,12 @@ import type {
 import { createId } from "@/utils/id";
 
 import { hostDisplayName } from "./guestMap";
+import { buildLiveSeedTurns } from "./nextTurn";
 import {
   runProducerBrief,
   type ProducerBrief,
 } from "./producerBrief";
+import { estimateSpeechSeconds } from "./speechTiming";
 
 export interface GenerateEpisodeResult {
   session: PodcastSession;
@@ -24,6 +26,8 @@ export interface GenerateEpisodeResult {
   producerUsed: boolean;
   /** Short producer summary for UI notes (segment arc). */
   producerSummary?: string;
+  /** True when further dialogue comes from POST /next. */
+  live: boolean;
 }
 
 const SCRIPT_SCHEMA = {
@@ -94,10 +98,15 @@ interface GeneratedScript {
 /**
  * Generate a podcast session from config + live/mock news.
  * Script times use a 720s baseline so the Experience UI can scale by duration.
+ *
+ * `live: true` → Producer outline + cold-open seed; further lines via POST /next.
+ * `live: false` (default) → full precomputed script (v1 sync path).
  */
 export async function generatePodcastEpisode(
   config: PodcastConfig,
+  options?: { live?: boolean },
 ): Promise<GenerateEpisodeResult> {
+  const live = Boolean(options?.live);
   const errors: string[] = [];
   const now = new Date().toISOString();
 
@@ -117,6 +126,56 @@ export async function generatePodcastEpisode(
   const producerUsed = Boolean(producerBrief);
   if (producerBrief) {
     errors.push(`Producer brief: ${producerBrief.summary}`);
+  }
+
+  if (live) {
+    const outline = producerBrief
+      ? outlineFromProducer(producerBrief, sources, config.durationMinutes)
+      : {
+          title: `${config.topics[0] ?? "Daily"} live briefing`,
+          description: "Live turn-by-turn panel discussion.",
+          topics: [
+            {
+              id: createId("topic"),
+              title: config.topics[0] ?? "Headlines",
+              description: "Opening segment",
+              estimatedDurationMinutes: config.durationMinutes,
+              sourceIds: sources.slice(0, 3).map((s) => s.id),
+            },
+          ],
+          estimatedDurationMinutes: config.durationMinutes,
+        };
+
+    const turns = buildLiveSeedTurns(
+      { config, outline, sources },
+      producerBrief?.coldOpenHook ??
+        `Welcome in — today we're live on ${config.topics.join(", ") || "the headlines"}.`,
+    );
+
+    const session: PodcastSession = {
+      id: createId("session"),
+      config,
+      outline,
+      turns,
+      sources,
+      currentTopicId: outline.topics[0]?.id,
+      status: "ready",
+      generationMode: "live",
+      createdAt: now,
+      updatedAt: now,
+    };
+
+    saveSession(session);
+    errors.push("Live mode: seed turn ready; further lines via /next");
+
+    return {
+      session,
+      usedMockNews: news.usedMock,
+      errors,
+      producerUsed,
+      producerSummary: producerBrief?.summary,
+      live: true,
+    };
   }
 
   let generated: GeneratedScript;
@@ -149,6 +208,7 @@ export async function generatePodcastEpisode(
     sources,
     currentTopicId: outline.topics[0]?.id,
     status: "ready",
+    generationMode: "script",
     createdAt: now,
     updatedAt: now,
   };
@@ -161,6 +221,7 @@ export async function generatePodcastEpisode(
     errors,
     producerUsed,
     producerSummary: producerBrief?.summary,
+    live: false,
   };
 }
 
@@ -228,10 +289,19 @@ async function generateScriptWithGemini(
     sourceLines,
     "",
     "Write 16-22 dialogue lines on a 0..720 second timeline.",
-    "Space consecutive lines 12-25 seconds apart. Do not leave multi-minute gaps between speakers.",
+    "Space consecutive lines roughly by spoken length (about 8–20 seconds) — do not pad gaps to fill duration.",
     "speaker must be one of: H (host), A (guest 1), B (guest 2), C (guest 3).",
     "Follow the producer segment order and guest focus when choosing who speaks.",
-    "Guests should disagree productively and avoid repeating the same point.",
+    "",
+    "Conversation dynamics (critical):",
+    "- This must sound like people talking to each other, not sequential expert monologues.",
+    "- Guests should often acknowledge, question, or challenge the previous speaker by name/claim.",
+    "- Include occasional substantive disagreement when perspectives differ — not forced sparring.",
+    "- Host (H) appears throughout: cold open, periodic follow-ups/clarifications/facilitation, and close.",
+    "- Do not put the host after every guest line; roughly every 2–4 guest turns is enough.",
+    "- Conversational wording (natural sentences). Avoid essay tone, filler, and slang piles.",
+    "- Do not repeat the same news summary across speakers — each line must advance the thread.",
+    "",
     "Attach sourceIndexes (1-based) when a line relies on a source.",
     "Open with the producer cold-open hook (host), close with the producer closing beat (host).",
     "chapters in the JSON should match the producer segments when a brief was provided.",
@@ -311,12 +381,19 @@ function normalizeGeneratedScript(
     throw new Error("Gemini returned no dialogue lines");
   }
 
-  // Re-pace onto an even 0..720 grid so the Experience player never sits
-  // through multi-minute silent gaps between speakers.
-  const spacing = Math.min(28, Math.max(12, Math.floor(700 / Math.max(lines.length - 1, 1))));
+  // Pace by estimated spoken length (word count) — not equal slots that invent
+  // multi‑second gaps for short lines. Relative gaps are preserved, then fitted
+  // onto the 0..720 baseline the Experience UI scales by duration.
+  let cursor = 0;
+  const starts = lines.map((line) => {
+    const start = cursor;
+    cursor += estimateSpeechSeconds(line.text);
+    return start;
+  });
+  const totalSpeech = Math.max(cursor, 1);
   const paced = lines.map((line, i) => ({
     ...line,
-    t: Math.min(710, i * spacing),
+    t: Math.min(710, (starts[i]! / totalSpeech) * 700),
   }));
 
   return {

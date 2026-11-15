@@ -7,6 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "mastra:dev": "mastra dev --dir src/mastra",
     "mastra:build": "mastra build --dir src/mastra"
   },
@@ -29,7 +31,8 @@
     "eslint-config-next": "16.4.6",
     "mastra": "^1.39.0",
     "tailwindcss": "4.3.3",
-    "typescript": "^5"
+    "typescript": "^5",
+    "vitest": "^3.2.4"
   },
   "description": "Interactive personalized AI podcast platform — SanD Hacks 2026"
 }

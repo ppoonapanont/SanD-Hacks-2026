@@ -1,7 +1,17 @@
 import { GoogleGenAI } from "@google/genai";
 
-/** Fast, available model for this API key. Override with GEMINI_MODEL. */
-const DEFAULT_MODEL = "gemini-3.5-flash-lite";
+/**
+ * Fast default for this API key. Override with GEMINI_MODEL.
+ * Prefer 3.1-flash-lite — free-tier daily quota on 3.5-flash-lite exhausts quickly
+ * and silent fallbacks made live turns repeat the same canned line.
+ */
+const DEFAULT_MODEL = "gemini-3.1-flash-lite";
+/** Tried in order when the primary model returns quota / rate-limit errors. */
+const QUOTA_FALLBACK_MODELS = [
+  "gemini-3.1-flash-lite",
+  "gemini-3.5-flash-lite",
+  "gemini-3.8-flash",
+] as const;
 const DEFAULT_TIMEOUT_MS = 30_000;
 
 export class GeminiError extends Error {
@@ -34,8 +44,20 @@ export function createGeminiClient(): GoogleGenAI {
   return new GoogleGenAI({ apiKey });
 }
 
+function isQuotaError(error: unknown): boolean {
+  const message =
+    error instanceof Error ? error.message : String(error ?? "");
+  return /quota|rate.?limit|resource.?exhausted|429/i.test(message);
+}
+
+function modelsToTry(primary: string): string[] {
+  const ordered = [primary, ...QUOTA_FALLBACK_MODELS];
+  return [...new Set(ordered.map((m) => m.trim()).filter(Boolean))];
+}
+
 /**
  * Generate JSON matching a JSON Schema. Server-side only.
+ * On free-tier quota exhaustion, retries alternate Gemini models.
  */
 export async function generateJson<T>(
   prompt: string,
@@ -43,45 +65,61 @@ export async function generateJson<T>(
   options?: { model?: string; signal?: AbortSignal; timeoutMs?: number },
 ): Promise<T> {
   const ai = createGeminiClient();
-  const model = options?.model ?? getGeminiModel();
-
   const timeoutMs = options?.timeoutMs ?? DEFAULT_TIMEOUT_MS;
-  const controller = new AbortController();
-  const onAbort = () => controller.abort();
-  options?.signal?.addEventListener("abort", onAbort, { once: true });
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  const models = modelsToTry(options?.model ?? getGeminiModel());
 
-  try {
-    const response = await ai.models.generateContent({
-      model,
-      contents: prompt,
-      config: {
-        responseMimeType: "application/json",
-        responseJsonSchema: schema,
-        abortSignal: controller.signal,
-      },
-    });
+  let lastError: Error | null = null;
 
-    const text = response.text?.trim();
-    if (!text) {
-      throw new GeminiError("Gemini returned an empty response");
-    }
+  for (let i = 0; i < models.length; i++) {
+    const model = models[i]!;
+    const controller = new AbortController();
+    const onAbort = () => controller.abort();
+    options?.signal?.addEventListener("abort", onAbort, { once: true });
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
 
     try {
-      return JSON.parse(text) as T;
-    } catch {
-      throw new GeminiError("Gemini returned invalid JSON");
+      const response = await ai.models.generateContent({
+        model,
+        contents: prompt,
+        config: {
+          responseMimeType: "application/json",
+          responseJsonSchema: schema,
+          abortSignal: controller.signal,
+        },
+      });
+
+      const text = response.text?.trim();
+      if (!text) {
+        throw new GeminiError("Gemini returned an empty response");
+      }
+
+      try {
+        return JSON.parse(text) as T;
+      } catch {
+        throw new GeminiError("Gemini returned invalid JSON");
+      }
+    } catch (error) {
+      if (controller.signal.aborted) {
+        throw new GeminiError(`Gemini request timed out after ${timeoutMs}ms`);
+      }
+      const normalized =
+        error instanceof GeminiError
+          ? error
+          : new GeminiError(
+              error instanceof Error ? error.message : "Gemini request failed",
+            );
+      lastError = normalized;
+      const canRetry =
+        isQuotaError(normalized) && i < models.length - 1;
+      if (!canRetry) throw normalized;
+      console.warn(
+        `[gemini] ${model} quota/rate-limited; retrying ${models[i + 1]}`,
+      );
+    } finally {
+      clearTimeout(timer);
+      options?.signal?.removeEventListener("abort", onAbort);
     }
-  } catch (error) {
-    if (controller.signal.aborted) {
-      throw new GeminiError(`Gemini request timed out after ${timeoutMs}ms`);
-    }
-    if (error instanceof GeminiError) throw error;
-    const message =
-      error instanceof Error ? error.message : "Gemini request failed";
-    throw new GeminiError(message);
-  } finally {
-    clearTimeout(timer);
-    options?.signal?.removeEventListener("abort", onAbort);
   }
+
+  throw lastError ?? new GeminiError("Gemini request failed");
 }
