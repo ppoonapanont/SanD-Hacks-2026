@@ -653,6 +653,19 @@ export function Experience() {
       stateRef.current.mode === "listen" &&
       stateRef.current.playing;
 
+    // Shared backoff + "still trying" note, used whether /next throws or just
+    // comes back with nothing usable (e.g. an empty generated line).
+    const retryDelay = async (attempt: number) => {
+      if (attempt === 3) {
+        setState((prev) =>
+          prev.sessionId === sessionId
+            ? { ...prev, note: "Having trouble continuing the episode — still trying…", noteK: 0 }
+            : prev,
+        );
+      }
+      await new Promise((resolve) => setTimeout(resolve, Math.min(1500 * attempt, 8000)));
+    };
+
     void (async () => {
       // A single failed call used to stall playback forever: nothing in this
       // effect's dependencies changes after a failure, so it never re-ran on
@@ -722,10 +735,20 @@ export function Experience() {
                 liveComplete: Boolean(result.done),
               };
             });
-          } else if (result.done) {
-            setState((prev) => ({ ...prev, liveComplete: true }));
+            break;
           }
-          break;
+          if (result.done) {
+            setState((prev) => ({ ...prev, liveComplete: true }));
+            break;
+          }
+          // Call succeeded but produced nothing usable (e.g. empty generated
+          // text) and the episode isn't actually finished — this used to be
+          // treated as "done, stop trying" with no error and no retry.
+          console.warn(
+            `[Experience] live /next returned no usable line (attempt ${attempt}); retrying`,
+            result.errors,
+          );
+          await retryDelay(attempt);
         } catch (error) {
           const message = error instanceof Error ? error.message : "";
           if (message.toLowerCase().includes("complete")) {
@@ -733,15 +756,7 @@ export function Experience() {
             break;
           }
           console.warn(`[Experience] live /next failed (attempt ${attempt}):`, error);
-          if (attempt === 3) {
-            // Only speak up once this looks like more than a one-off blip.
-            setState((prev) =>
-              prev.sessionId === sessionId
-                ? { ...prev, note: "Having trouble continuing the episode — still trying…", noteK: 0 }
-                : prev,
-            );
-          }
-          await new Promise((resolve) => setTimeout(resolve, Math.min(1500 * attempt, 8000)));
+          await retryDelay(attempt);
         }
       }
       nextFetchLockRef.current = false;
