@@ -93,12 +93,14 @@ export default function HomePage() {
               boxShadow: "0 40px 80px rgba(0,0,0,0.35)",
             }}
           >
-            <div style={{ display: "flex", gap: 16, alignItems: "center" }}>
-              <GuestAvatar initials="Mi" avatarKey="host" size={52} opacity={0.5} />
-              <GuestAvatar initials="JB" avatarKey="investor" size={52} opacity={0.5} />
-              <GuestAvatar initials="AC" avatarKey="founder" size={52} active />
-              <GuestAvatar initials="MH" avatarKey="economist" size={52} opacity={0.5} />
-              <span className="eq" style={{ color: "#8fcaa8", marginLeft: "auto" }} aria-hidden="true">
+            {/* size/gap kept small enough that avatars + the eq meter never
+                outgrow the card's own width once it shrinks on mobile. */}
+            <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+              <GuestAvatar initials="Mi" avatarKey="host" size={44} opacity={0.5} />
+              <GuestAvatar initials="JB" avatarKey="investor" size={44} opacity={0.5} />
+              <GuestAvatar initials="AC" avatarKey="founder" size={44} active />
+              <GuestAvatar initials="MH" avatarKey="economist" size={44} opacity={0.5} />
+              <span className="eq" style={{ color: "#8fcaa8", marginLeft: "auto", flex: "none" }} aria-hidden="true">
                 <span />
                 <span />
                 <span />
