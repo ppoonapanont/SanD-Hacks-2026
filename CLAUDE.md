@@ -81,7 +81,7 @@ When adding Mastra-driven prep/live `/next`, branch from or compare against **v1
 
 | Item | Status | Location / notes |
 |------|--------|------------------|
-| Mastra agents and workflows | PARTIAL | **v1:** `@mastra/core` installed + research/moderator + interrupt/resume workflows for Studio; **episode generate is still direct Gemini** (Mastra multi-agent prep/live turns = post-v1) |
+| Mastra agents and workflows | PARTIAL | **v1+:** research/moderator + **Producer** (`producer-agent`) shapes `/generate` brief; host/guest/fact-check + live `/next` still post-v1 |
 | Moderator logic | COMPLETE | Gemini moderator plan (who answers + research need) in `interact.ts` |
 | Guest agent coordination | COMPLETE | Distinct guest reply turns from Gemini; targetGuestId supported |
 | User question handling | COMPLETE | `/api/podcast/interact` + Experience `beginInterrupt` (demo fallback) |

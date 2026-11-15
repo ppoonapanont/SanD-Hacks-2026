@@ -5,6 +5,8 @@ export {
 export type { ExperienceEpisodePayload } from "./adaptToExperience";
 export { generatePodcastEpisode } from "./generate";
 export type { GenerateEpisodeResult } from "./generate";
+export { runProducerBrief } from "./producerBrief";
+export type { ProducerBrief, ProducerSegment } from "./producerBrief";
 export {
   buildPodcastConfig,
   mapDepthLabel,

@@ -18,6 +18,10 @@ export interface GeneratePodcastResponse {
   session: PodcastSession;
   usedMockNews?: boolean;
   errors?: string[];
+  /** True when Mastra Producer shaped the episode brief before scripting. */
+  producerUsed?: boolean;
+  /** Short producer arc summary for UI notes. */
+  producerSummary?: string;
 }
 
 /** POST /api/podcast/next */

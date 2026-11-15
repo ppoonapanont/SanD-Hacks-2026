@@ -617,16 +617,23 @@ export function Experience() {
             guestIds: snapshot.guests,
             customGuests: snapshot.customGuests,
           });
-          const { session } = await generatePodcast({ config });
+          const { session, producerUsed, producerSummary, usedMockNews } =
+            await generatePodcast({ config });
           if (!stillCurrent()) return;
-          const adapted = adaptSessionToExperience(session);
+          const adapted = adaptSessionToExperience(session, { usedMockNews });
+          const noteParts = [
+            producerUsed
+              ? `Producer: ${producerSummary ?? adapted.title}`
+              : `Generated: ${adapted.title}`,
+            usedMockNews
+              ? "mock/fallback news — sources labeled in notes"
+              : null,
+          ].filter(Boolean);
           await startEpisode(
             adapted.script,
             adapted.sources,
             adapted.sessionId,
-            adapted.usedMockNews
-              ? "Generated with mock/fallback news — sources labeled in notes"
-              : `Generated: ${adapted.title}`,
+            noteParts.join(" · "),
           );
         } catch (error) {
           if (!stillCurrent()) return;

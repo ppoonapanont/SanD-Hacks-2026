@@ -27,10 +27,13 @@ export async function POST(request: Request) {
     const response: GeneratePodcastResponse & {
       usedMockNews: boolean;
       errors: string[];
+      producerUsed: boolean;
     } = {
       session: result.session,
       usedMockNews: result.usedMockNews,
       errors: result.errors,
+      producerUsed: result.producerUsed,
+      producerSummary: result.producerSummary,
     };
     return NextResponse.json(response);
   } catch (error) {

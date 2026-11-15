@@ -6,6 +6,6 @@ export function getMastraGeminiModel(): `${string}/${string}` {
   const raw = process.env.GEMINI_MODEL?.trim();
   if (raw?.includes("/")) return raw as `${string}/${string}`;
   if (raw) return `google/${raw}` as `${string}/${string}`;
-  // Stable, widely available flash-lite for hackathon demos.
-  return "google/gemini-2.5-flash-lite";
+  // Keep in sync with `src/services/gemini/client.ts` DEFAULT_MODEL.
+  return "google/gemini-3.5-flash-lite";
 }
