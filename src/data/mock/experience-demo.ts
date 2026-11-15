@@ -175,6 +175,8 @@ export interface DemoSource {
   outlet: string;
   date: string;
   note: string;
+  /** Real article URL, when one exists — never fabricated for scripted demo sources. */
+  url?: string;
 }
 
 export const DEMO_SOURCES: Record<number, DemoSource> = {

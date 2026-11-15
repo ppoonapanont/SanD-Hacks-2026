@@ -69,6 +69,7 @@ export interface SourceCardView {
   outlet: string;
   date: string;
   note: string;
+  url?: string;
   isLive: boolean;
   cited: boolean;
   border: string;
@@ -90,7 +91,7 @@ export interface TranscriptLineView {
   opacity: number;
   fontSize: number;
   cites: CiteChipView[];
-  openSource: { title: string; outlet: string; date: string; note: string } | null;
+  openSource: { title: string; outlet: string; date: string; note: string; url?: string } | null;
 }
 
 export interface TopicChipView {
@@ -474,6 +475,7 @@ export function deriveExperienceView(state: ExperienceState): ExperienceView {
         outlet: src.outlet,
         date: src.date,
         note: src.note,
+        url: src.url,
         isLive: !state.liveSources && n === 5,
         cited: isCited,
         border: isCited ? "#97acc8" : "rgba(182,191,193,0.14)",

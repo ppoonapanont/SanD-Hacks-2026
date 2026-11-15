@@ -61,7 +61,9 @@ export function playerTheme(isLight: boolean, isResearching: boolean): PlayerThe
     fill: "#97acc8",
     ctrlBg: "#eef1f3",
     ctrlFg: "#051230",
-    inputBg: "#051230",
-    inputBd: "rgba(182,191,193,0.3)",
+    // Lighter than the card it sits in, not darker — it was #051230 (darker than
+    // the page itself), which made the composer input invisible against the panel.
+    inputBg: "#1c3566",
+    inputBd: "rgba(182,191,193,0.4)",
   };
 }

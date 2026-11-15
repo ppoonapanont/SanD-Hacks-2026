@@ -207,13 +207,21 @@ export function useAudioQueue() {
       clipExhaustedRef.current = false;
       el.src = nextSrc;
       el.load();
+      // "loadeddata" and the fallback timer both call onReady — without this guard,
+      // whichever fires second re-armed an already-playing clip, yanking currentTime
+      // back to 0 mid-line (audible as the speaker repeating their opening words).
+      let armedOnce = false;
       const onReady = () => {
+        if (armedOnce) return;
         // Drop stale ready callbacks if a newer turn won.
         if (queueRef.current[currentIndexRef.current]?.turnId !== currentTurnId) return;
+        armedOnce = true;
+        el.removeEventListener("loadeddata", onReady);
+        window.clearTimeout(fallbackTimer);
         armClip();
       };
-      el.addEventListener("loadeddata", onReady, { once: true });
-      window.setTimeout(onReady, 500);
+      const fallbackTimer = window.setTimeout(onReady, 500);
+      el.addEventListener("loadeddata", onReady);
     } else {
       // Same src as previous line (identical TTS) — must rewind or near-end skips us.
       armClip();

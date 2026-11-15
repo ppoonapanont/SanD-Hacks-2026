@@ -308,6 +308,9 @@ export default function OverlayPage() {
         minHeight: "100vh",
         width: "100%",
         background: "#00FF00",
+        // Boosts every color on this recording-only page. #00FF00 stays pure
+        // since 0 and 255 are already the extremes contrast stretches toward.
+        filter: "contrast(1.35)",
         display: "flex",
         flexDirection: "column",
         alignItems: "center",
@@ -402,7 +405,9 @@ export default function OverlayPage() {
                         transform: selected ? "scale(1.08)" : "scale(1)",
                       }}
                     >
-                      <GuestAvatar initials={p.initials} avatarKey={p.avatarKey} size={56} active={selected} />
+                      <span style={{ display: "inline-flex", filter: "saturate(1.7)" }}>
+                        <GuestAvatar initials={p.initials} avatarKey={p.avatarKey} size={56} active={selected} />
+                      </span>
                       {selected && (
                         <span
                           style={{
@@ -438,7 +443,7 @@ export default function OverlayPage() {
 
           {mode === "setupCustom" && (
             <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 18 }}>
-              <div style={{ display: "flex", flexWrap: "wrap", justifyContent: "center", gap: 24 }}>
+              <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 14 }}>
                 <CustomField
                   label="Name"
                   value={CUSTOM_GUEST_DEMO.name.slice(0, customNameLen)}
@@ -497,7 +502,9 @@ export default function OverlayPage() {
                         transition: "all 0.2s ease",
                       }}
                     >
-                      <GuestAvatar initials={option.label.slice(0, 2)} avatarKey={option.key} size={36} active={selected} />
+                      <span style={{ display: "inline-flex", filter: "saturate(1.7)" }}>
+                        <GuestAvatar initials={option.label.slice(0, 2)} avatarKey={option.key} size={36} active={selected} />
+                      </span>
                       <span style={{ fontSize: 11, color: "#b6bfc1" }}>{option.label}</span>
                     </div>
                   );
@@ -538,7 +545,9 @@ export default function OverlayPage() {
               const active = activeId === id;
               return (
                 <div key={id} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 10 }}>
-                  <GuestAvatar initials={p.initials} avatarKey={p.avatarKey} size={84} active={active} />
+                  <span style={{ display: "inline-flex", filter: "saturate(1.7)" }}>
+                    <GuestAvatar initials={p.initials} avatarKey={p.avatarKey} size={84} active={active} />
+                  </span>
                   <span
                     style={{
                       fontSize: 14,
@@ -556,7 +565,9 @@ export default function OverlayPage() {
             })}
             {showQuestion && (
               <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 10 }}>
-                <GuestAvatar initials="You" avatarKey="you" size={84} active={activeId === "you"} />
+                <span style={{ display: "inline-flex", filter: "saturate(1.7)" }}>
+                  <GuestAvatar initials="You" avatarKey="you" size={84} active={activeId === "you"} />
+                </span>
                 <span
                   style={{
                     fontSize: 14,
@@ -658,7 +669,7 @@ export default function OverlayPage() {
 
 function CustomField({ label, value, typing }: { label: string; value: string; typing: boolean }) {
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 4, minWidth: 150, alignItems: "center" }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: 4, alignItems: "center" }}>
       <span style={{ fontSize: 11, fontWeight: 600, letterSpacing: "0.06em", textTransform: "uppercase", color: "#051230", background: "#eef1f3", padding: "2px 10px", borderRadius: 999 }}>
         {label}
       </span>
@@ -666,12 +677,14 @@ function CustomField({ label, value, typing }: { label: string; value: string; t
         style={{
           display: "flex",
           alignItems: "center",
+          justifyContent: "center",
           borderBottom: "2px solid rgba(255,255,255,0.6)",
           paddingBottom: 4,
           minHeight: 22,
+          maxWidth: 420,
         }}
       >
-        <span style={{ fontSize: 15, fontWeight: 700, color: "#051230" }}>{value}</span>
+        <span style={{ fontSize: 15, fontWeight: 700, color: "#051230", textAlign: "center" }}>{value}</span>
         {typing && (
           <span
             style={{
@@ -718,7 +731,9 @@ function Bubble({
         boxShadow: "0 10px 24px rgba(0,0,0,0.35)",
       }}
     >
-      <GuestAvatar initials={initials} avatarKey={avatarKey} size={32} />
+      <span style={{ display: "inline-flex", filter: "saturate(1.7)" }}>
+        <GuestAvatar initials={initials} avatarKey={avatarKey} size={32} />
+      </span>
       <div style={{ display: "flex", flexDirection: "column", gap: 2, minWidth: 0 }}>
         <span style={{ fontSize: 13, fontWeight: 600, color }}>{name}</span>
         <span style={{ fontSize: current ? 16 : 14, lineHeight: 1.4, color: "#eef1f3" }}>{text}</span>
