@@ -10,14 +10,21 @@ import { createId } from "@/utils/id";
 
 import {
   guestEngagementRules,
-  heuristicNextMove,
   hostEngagementRules,
+  planNextTurn,
   spokenDialogueStyleRules,
   type ConversationMove,
+  type TurnPlan,
 } from "./conversationMoves";
+import {
+  deriveConversationState,
+  isRepetitiveClaim,
+  resolveStoryFocus,
+} from "./conversationState";
 import { hostDisplayName } from "./guestMap";
 import { sanitizeHostSpokenLine } from "./hostLines";
 import { estimateSpeechSeconds, nextSpeechTimestamp } from "./speechTiming";
+import { finalizeSpokenLine } from "./spokenText";
 
 /** Live /next must finish inside a spoken line (~8–12s). Keep LLM calls tight. */
 const LINE_TIMEOUT_MS = 12_000;
@@ -37,7 +44,7 @@ const LINE_SCHEMA = {
     sourceIndexes: {
       type: "array",
       items: { type: "number" },
-      description: "1-based indexes into the session sources list",
+      description: "1-based indexes into the session sources list — metadata only, never speak these",
     },
   },
   required: ["text", "sourceIndexes"],
@@ -49,7 +56,6 @@ const LINE_SCHEMA = {
  */
 export function targetTurnCount(durationMinutes: number): number {
   const totalSec = Math.max(60, durationMinutes * 60);
-  // ~12s average spoken line → fewer padded turns than the old 10s fixed grid.
   return Math.max(8, Math.min(48, Math.round(totalSec / 12) + 1));
 }
 
@@ -70,7 +76,7 @@ function formatSources(sources: NewsSource[]): string {
     .map((s, i) => {
       const claims = (s.keyClaims ?? []).slice(0, 2).join(" | ");
       return [
-        `[${i + 1}] ${s.title} — ${s.publisher}${s.isMock ? " (mock)" : ""}`,
+        `Source ${i + 1}: ${s.title} — ${s.publisher}${s.isMock ? " (mock)" : ""}`,
         s.summary.slice(0, 220),
         claims ? `claims: ${claims}` : "",
       ]
@@ -90,117 +96,6 @@ function hostTurn(text: string, timestamp: number, topicId?: string): Conversati
     timestamp,
     ...(topicId ? { topicId } : {}),
   };
-}
-
-/** Short hook from the prior turn so heuristic fallbacks stay specific. */
-function priorClaimSnippet(session: PodcastSession, max = 72): string {
-  const last = session.turns[session.turns.length - 1];
-  const raw = (last?.text ?? "").replace(/\s+/g, " ").trim();
-  if (!raw) {
-    const topic =
-      session.outline?.topics.find((t) => t.id === session.currentTopicId) ??
-      session.outline?.topics[0];
-    return (
-      topic?.title?.trim() ||
-      session.config.topics[0]?.trim() ||
-      "this thread"
-    );
-  }
-  return raw.length <= max ? raw : `${raw.slice(0, max - 1)}…`;
-}
-
-function topicTitle(session: PodcastSession): string {
-  const topic =
-    session.outline?.topics.find((t) => t.id === session.currentTopicId) ??
-    session.outline?.topics[0];
-  return (
-    topic?.title?.trim() ||
-    session.config.topics[0]?.trim() ||
-    "today's story"
-  );
-}
-
-/** Varied host lines when Gemini fails — never reuse one stock phrase every turn. */
-function fallbackHostLine(
-  session: PodcastSession,
-  move: ConversationMove,
-  closing: boolean,
-): string {
-  if (closing) {
-    return "That's our rundown for now — thanks for listening, and stay curious.";
-  }
-  const last = session.turns[session.turns.length - 1];
-  const who = last?.speakerName ?? "the panel";
-  const claim = priorClaimSnippet(session);
-  const variants: Record<Exclude<ConversationMove, "close">, string[]> = {
-    moderate: [
-      `Hold on — ${who}, can you pressure-test that last claim for a second?`,
-      `Quick redirect: what's the one fact under "${claim}" we should not gloss over?`,
-      `${who}, give me the sharper version of that — what actually changes if you're right?`,
-    ],
-    question: [
-      `${who}, what would change your mind about "${claim}"?`,
-      `For listeners: what's the open question still hanging after that point?`,
-      `${who}, who on the panel should answer the other side of that?`,
-    ],
-    react: [
-      `Okay, I'm tracking "${claim}" — someone push on the mechanism.`,
-      `That's a clear stake. Who wants to answer ${who} directly?`,
-    ],
-    challenge: [
-      `I'm going to pause us there — is "${claim}" settled, or still contested?`,
-      `Devil's advocate for a beat: what if ${who} has the causation backwards?`,
-    ],
-    advance: [
-      `Let's move the thread forward — implications of "${claim}" for ${topicTitle(session)}?`,
-      `Useful beat. What's the next concrete angle we haven't covered?`,
-    ],
-  };
-  const pool = variants[move === "close" ? "moderate" : move] ?? variants.moderate;
-  return pool[session.turns.length % pool.length] ?? pool[0]!;
-}
-
-/** Varied guest lines when Gemini fails — keyed by move + prior claim, not one template. */
-function fallbackGuestLine(
-  session: PodcastSession,
-  guest: Guest,
-  move: ConversationMove,
-): string {
-  const seat = guest.expertise.toLowerCase();
-  const last = session.turns[session.turns.length - 1];
-  const who =
-    last && last.speakerId !== guest.id ? last.speakerName : "the last point";
-  const claim = priorClaimSnippet(session);
-  const topic = topicTitle(session);
-
-  const byMove: Record<ConversationMove, string[]> = {
-    react: [
-      `${who}'s point on "${claim}" lands — from a ${seat} seat, the missing piece is how it scales for ${topic}.`,
-      `Building on ${who}: if "${claim}" is right, the ${seat} implication is we still need a clearer operator.`,
-    ],
-    challenge: [
-      `I'd push back on ${who} — from a ${seat} seat, "${claim}" overstates the mechanism.`,
-      `Respectfully, ${who}: that headline isn't the same as the mechanism. ${seat} lens says prove the causal step.`,
-    ],
-    question: [
-      `${who}, one clarifying ask from the ${seat} side: what evidence would flip "${claim}"?`,
-      `Question for ${who}: on ${topic}, are we talking incentives or capability when you say "${claim}"?`,
-    ],
-    advance: [
-      `Take ${who}'s beat further — ${seat} angle on ${topic} is the second-order effect after "${claim}".`,
-      `New angle: once you accept "${claim}", the ${seat} follow-on is who absorbs the downside.`,
-    ],
-    moderate: [
-      `Let me reframe for a second — ${seat} view of ${topic} starts from the constraint behind "${claim}".`,
-      `Stepping in: the ${seat} cut on "${claim}" is simpler than we're making it.`,
-    ],
-    close: [
-      `Quick close from my ${seat} lane: watch the mechanism on ${topic}, not just the headline.`,
-    ],
-  };
-
-  const pool = byMove[move] ?? byMove.react;
-  return pool[session.turns.length % pool.length] ?? pool[0]!;
 }
 
 function guestTurn(
@@ -223,6 +118,56 @@ function guestTurn(
   };
 }
 
+/** Natural host fallbacks — never planning labels or truncated quotes. */
+function fallbackHostLine(
+  session: PodcastSession,
+  plan: TurnPlan,
+  closing: boolean,
+): string {
+  const { storyFocus } = resolveStoryFocus(session);
+  if (closing || plan.move === "close") {
+    return `That's our take on ${storyFocus} for now — thanks for listening, and stay curious.`;
+  }
+  const guests = session.config.guests;
+  const addressed =
+    guests.find((g) => g.id === plan.addressingSpeakerId)?.name ??
+    session.turns[session.turns.length - 1]?.speakerName ??
+    "the panel";
+  const variants = [
+    `${addressed}, what would actually change if that claim about ${storyFocus} is right?`,
+    `Hold on — what's the one fact under ${storyFocus} we should not gloss over?`,
+    `${addressed}, give me the sharper version: what's the real tradeoff here?`,
+  ];
+  return variants[session.turns.length % variants.length]!;
+}
+
+/** Natural guest fallbacks grounded in the story — never "New angle" / truncated quotes. */
+function fallbackGuestLine(
+  session: PodcastSession,
+  guest: Guest,
+  plan: TurnPlan,
+): string {
+  const { storyFocus } = resolveStoryFocus(session);
+  const last = session.turns[session.turns.length - 1];
+  const who =
+    last && last.speakerId !== guest.id ? last.speakerName : null;
+  const seat = guest.expertise.toLowerCase();
+
+  if (plan.move === "react" && who) {
+    return `I hear ${who} — from a ${seat} view, the hard part with ${storyFocus} is still proving the mechanism, not the headline.`;
+  }
+  if (plan.move === "question" && who) {
+    return `${who}, what evidence would actually change your mind on ${storyFocus}?`;
+  }
+  if (plan.move === "challenge" && who) {
+    return `I'm not sure that holds, ${who}. On ${storyFocus}, the downside still looks underpriced from a ${seat} seat.`;
+  }
+  if (plan.move === "advance") {
+    return `The next beat on ${storyFocus}, for me, is who absorbs the cost if this takes longer than expected.`;
+  }
+  return `From a ${seat} angle, ${storyFocus} comes down to incentives versus capability — and those aren't the same thing.`;
+}
+
 /** Placeholder start time from prior text length (Experience overwrites with measured TTS). */
 export function timestampForNewTurn(session: PodcastSession): number {
   const last = session.turns[session.turns.length - 1];
@@ -235,7 +180,7 @@ export function timestampForNewTurn(session: PodcastSession): number {
 }
 
 /**
- * Advance a live session by one generated turn (Moderator routes → speaker writes).
+ * Advance a live session by one generated turn (plan → speaker writes).
  */
 export async function advancePodcastTurn(sessionId: string): Promise<NextTurnResult> {
   const errors: string[] = [];
@@ -270,13 +215,21 @@ export async function advancePodcastTurn(sessionId: string): Promise<NextTurnRes
     };
   }
 
-  const shouldPreferClose = session.turns.length >= softTarget - 1;
-  const plan = planNextSpeaker(session, shouldPreferClose);
+  const state = deriveConversationState(session);
+  // Prefer closing near the end, but never before an addressed question is answered.
+  const preferClose =
+    session.turns.length >= softTarget - 1 && !state.pendingAnswerGuestId;
+  const forceClose = session.turns.length >= hardMax - 1;
+
+  const plan = planNextTurn({
+    forceClose,
+    preferClose,
+    session,
+  });
+
   const timestamp = timestampForNewTurn(session);
   const topicId =
-    plan.topicId && session.outline?.topics.some((t) => t.id === plan.topicId)
-      ? plan.topicId
-      : session.currentTopicId ?? session.outline?.topics[0]?.id;
+    session.currentTopicId ?? session.outline?.topics[0]?.id;
 
   let turn: ConversationTurn;
 
@@ -285,21 +238,14 @@ export async function advancePodcastTurn(sessionId: string): Promise<NextTurnRes
     plan.speakerId === "host" ||
     !session.config.guests.some((g) => g.id === plan.speakerId)
   ) {
-    const text = await generateHostLine(
-      session,
-      plan.direction,
-      plan.move,
-      plan.shouldClose,
-      errors,
-    );
+    const text = await generateHostLine(session, plan, errors);
     turn = hostTurn(text, timestamp, topicId);
   } else {
     const guest = session.config.guests.find((g) => g.id === plan.speakerId)!;
     const { text, sourceIds } = await generateGuestLine(
       session,
       guest,
-      plan.direction,
-      plan.move,
+      plan,
       errors,
     );
     turn = guestTurn(guest, text, timestamp, sourceIds, topicId);
@@ -324,76 +270,45 @@ export async function advancePodcastTurn(sessionId: string): Promise<NextTurnRes
   };
 }
 
-/**
- * Route the next live turn with the local heuristic.
- * A Moderator agent + JSON rewrite used to cost 2 sequential LLM calls (~5–15s)
- * and left playback stalled; interrupt routing still uses the Mastra Moderator.
- */
-function planNextSpeaker(
-  session: PodcastSession,
-  forceClose: boolean,
-): {
-  speakerId: string;
-  topicId: string;
-  move: ConversationMove;
-  direction: string;
-  shouldClose: boolean;
-} {
-  const last = session.turns[session.turns.length - 1];
-  const lastId = last?.speakerId ?? "";
-  const topicFallback =
-    session.currentTopicId ?? session.outline?.topics[0]?.id ?? "";
-  const heuristic = heuristicNextMove({
-    forceClose,
-    turns: session.turns,
-    lastSpeakerId: lastId,
-    guests: session.config.guests,
-  });
-
-  return {
-    speakerId: heuristic.speakerId,
-    topicId: topicFallback,
-    move: heuristic.move,
-    direction: heuristic.direction,
-    shouldClose: forceClose || heuristic.move === "close",
-  };
-}
-
 async function generateHostLine(
   session: PodcastSession,
-  direction: string,
-  move: ConversationMove,
-  closing: boolean,
+  plan: TurnPlan,
   errors: string[],
 ): Promise<string> {
   const hostName = hostDisplayName();
-  const fallback = fallbackHostLine(session, move, closing);
+  const closing = plan.shouldClose || plan.move === "close";
+  const fallback = fallbackHostLine(session, plan, closing);
+  const state = deriveConversationState(session);
 
   if (!isGeminiConfigured()) {
     errors.push("Host line: Gemini not configured");
-    return fallback;
+    return finalizeSpokenLine(fallback, fallback);
   }
 
-  const last = session.turns[session.turns.length - 1];
+  const addressedName =
+    session.config.guests.find((g) => g.id === plan.addressingSpeakerId)?.name ??
+    null;
 
   try {
     const result = await generateJson<{ text: string; sourceIndexes: number[] }>(
       [
         `You are ${hostName}, podcast host.`,
         ...spokenDialogueStyleRules(),
-        ...hostEngagementRules({ move, closing }),
+        ...hostEngagementRules({
+          move: plan.move,
+          closing,
+          storyFocus: state.storyFocus,
+          addressingName: addressedName,
+        }),
         "",
-        `Conversation move: ${move}`,
-        `Direction: ${direction}`,
-        last ? `Prior speaker: ${last.speakerName}` : "",
+        "Internal plan (do not speak these words):",
+        `move=${plan.move}; focus=${plan.focus}`,
+        state.storyWhy ? `Why it matters: ${state.storyWhy}` : "",
         "",
         "Recent turns:",
-        session.turns
-          .slice(-5)
-          .map((t) => `${t.speakerName}: ${t.text}`)
-          .join("\n") || "(none)",
+        formatRecentTurns(session.turns),
         "",
-        "Sources (optional citations):",
+        "Background sources (use for grounding; put indexes only in sourceIndexes JSON field):",
         formatSources(session.sources),
       ]
         .filter(Boolean)
@@ -401,27 +316,27 @@ async function generateHostLine(
       LINE_SCHEMA,
       { timeoutMs: LINE_TIMEOUT_MS },
     );
-    return (
+    const raw =
       sanitizeHostSpokenLine(String(result.text ?? "").trim(), hostName) ||
-      fallback
-    );
+      fallback;
+    return finalizeSpokenLine(raw, fallback);
   } catch (error) {
     errors.push(
       error instanceof Error ? `Host line: ${error.message}` : "Host line failed",
     );
-    return fallback;
+    return finalizeSpokenLine(fallback, fallback);
   }
 }
 
 async function generateGuestLine(
   session: PodcastSession,
   guest: Guest,
-  direction: string,
-  move: ConversationMove,
+  plan: TurnPlan,
   errors: string[],
 ): Promise<{ text: string; sourceIds: string[] }> {
+  const fallbackText = fallbackGuestLine(session, guest, plan);
   const fallback = {
-    text: fallbackGuestLine(session, guest, move),
+    text: finalizeSpokenLine(fallbackText, fallbackText),
     sourceIds: [] as string[],
   };
 
@@ -430,13 +345,15 @@ async function generateGuestLine(
     return fallback;
   }
 
+  const state = deriveConversationState(session);
   const last = session.turns[session.turns.length - 1];
   const lastSpeakerName =
     last && last.speakerId !== guest.id ? last.speakerName : null;
+  const addressingName =
+    session.config.guests.find((g) => g.id === plan.addressingSpeakerId)?.name ??
+    lastSpeakerName;
 
   try {
-    // One structured call — Mastra Guest agent + rewrite was 2 sequential LLMs
-    // and routinely exceeded a spoken line's length. Interrupt path still uses agents.
     const structured = await generateJson<{
       text: string;
       sourceIndexes: number[];
@@ -450,22 +367,28 @@ async function generateGuestLine(
         guest.background ? `Background: ${guest.background}` : "",
         "",
         ...spokenDialogueStyleRules(),
-        ...guestEngagementRules({ move, lastSpeakerName }),
+        ...guestEngagementRules({
+          move: plan.move,
+          lastSpeakerName,
+          addressingName,
+          storyFocus: state.storyFocus,
+        }),
         "",
-        `Conversation move: ${move}`,
-        `Direction: ${direction}`,
+        "Internal plan (do not speak these words):",
+        `move=${plan.move}; focus=${plan.focus}`,
+        state.pendingQuestion
+          ? `Open question to answer: ${state.pendingQuestion}`
+          : "",
+        state.storyWhy ? `Why it matters: ${state.storyWhy}` : "",
         "",
-        "Recent turns (respond to these — do not ignore them):",
-        session.turns
-          .slice(-5)
-          .map((t) => `${t.speakerName}: ${t.text}`)
-          .join("\n") || "(none)",
+        "Recent turns:",
+        formatRecentTurns(session.turns),
         "",
-        "Research sources (cite with 1-based sourceIndexes, or []):",
+        "Research sources (ground claims here; sourceIndexes are JSON metadata only — never say [1] or 'source 2' aloud):",
         formatSources(session.sources) || "(none)",
         `Source count N=${session.sources.length}`,
         "",
-        "Return JSON: 1–3 spoken sentences in character. Do not invent facts.",
+        "Return JSON with spoken words only.",
       ]
         .filter(Boolean)
         .join("\n"),
@@ -473,11 +396,18 @@ async function generateGuestLine(
       { timeoutMs: LINE_TIMEOUT_MS },
     );
 
-    const text = String(structured.text ?? "").trim();
-    if (!text) {
-      errors.push(`Guest line ${guest.name}: empty`);
-      return fallback;
+    let text = finalizeSpokenLine(String(structured.text ?? "").trim(), fallbackText);
+    if (isRepetitiveClaim(text, state.recentClaimFingerprints)) {
+      errors.push(`Guest line ${guest.name}: repetitive; using alternate fallback`);
+      text = finalizeSpokenLine(
+        fallbackGuestLine(session, guest, {
+          ...plan,
+          move: plan.move === "react" ? "advance" : "react",
+        }),
+        fallbackText,
+      );
     }
+
     const sourceIds = (structured.sourceIndexes ?? [])
       .map((n) => session.sources[Number(n) - 1]?.id)
       .filter((id): id is string => Boolean(id));
@@ -493,18 +423,39 @@ async function generateGuestLine(
   }
 }
 
-/** Seed turns for a live episode (cold open) before /next takes over. */
+function formatRecentTurns(turns: ConversationTurn[]): string {
+  return (
+    turns
+      .slice(-6)
+      .map((t) => `${t.speakerName}: ${t.text}`)
+      .join("\n") || "(none)"
+  );
+}
+
+/**
+ * Seed turns for a live episode (cold open) before /next takes over.
+ * Prefer a concrete story headline over "live on Business".
+ */
 export function buildLiveSeedTurns(
   sessionLike: Pick<PodcastSession, "config" | "outline" | "sources">,
   coldOpenHook: string,
 ): ConversationTurn[] {
-  const hook =
-    coldOpenHook.trim() ||
-    "Welcome in — we've got a sharp panel and fresh headlines to unpack.";
+  const { storyFocus } = resolveStoryFocus(sessionLike);
+  const raw = coldOpenHook.trim();
+  const genericCategoryOpen =
+    !raw ||
+    /today we're live on\b/i.test(raw) ||
+    /welcome in — we've got a sharp panel/i.test(raw);
+
+  const hook = genericCategoryOpen
+    ? `Welcome in — we're opening on ${storyFocus}.`
+    : raw;
+
   const topicId = sessionLike.outline?.topics[0]?.id;
   const text =
     sanitizeHostSpokenLine(hook, hostDisplayName()) || hook;
-  return [hostTurn(text, 0, topicId)];
+  return [hostTurn(finalizeSpokenLine(text, hook), 0, topicId)];
 }
 
 export { estimateSpeechSeconds };
+export type { ConversationMove, TurnPlan };

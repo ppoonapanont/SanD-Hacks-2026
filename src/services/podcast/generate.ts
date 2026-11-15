@@ -148,8 +148,7 @@ export async function generatePodcastEpisode(
 
     const turns = buildLiveSeedTurns(
       { config, outline, sources },
-      producerBrief?.coldOpenHook ??
-        `Welcome in — today we're live on ${config.topics.join(", ") || "the headlines"}.`,
+      producerBrief?.coldOpenHook ?? "",
     );
 
     const session: PodcastSession = {

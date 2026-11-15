@@ -4,6 +4,7 @@ import type { Guest, NewsSource } from "@/types";
 
 import { hostDisplayName } from "./guestMap";
 import { sanitizeHostSpokenLine } from "./hostLines";
+import { finalizeSpokenLine } from "./spokenText";
 
 export interface StructuredGuestReply {
   guestId: string;
@@ -207,7 +208,7 @@ export async function runGuestReplies(input: {
       used.add(guestId);
       replies.push({
         guestId,
-        text,
+        text: finalizeSpokenLine(text, text),
         sourceIndexes: (reply.sourceIndexes ?? [])
           .map((n) => Number(n))
           .filter((n) => Number.isFinite(n) && n >= 1 && n <= researchSources.length),

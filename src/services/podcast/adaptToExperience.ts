@@ -55,6 +55,21 @@ export function adaptSessionToExperience(
   };
 }
 
+/** Keep only clickable http(s) article links for the Sources panel. */
+function articleHref(url: string | undefined): string | undefined {
+  const raw = url?.trim();
+  if (!raw) return undefined;
+  try {
+    const parsed = new URL(raw);
+    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+      return undefined;
+    }
+    return parsed.toString();
+  } catch {
+    return undefined;
+  }
+}
+
 function toDemoSource(source: NewsSource): DemoSource {
   const published = source.publishedAt
     ? new Date(source.publishedAt).toLocaleDateString(undefined, {
@@ -70,8 +85,7 @@ function toDemoSource(source: NewsSource): DemoSource {
     note: source.isMock
       ? `Mock/demo source. ${source.summary.slice(0, 160)}`
       : source.summary.slice(0, 180),
-    // Mock/fallback sources have no real article behind them — never link those.
-    url: source.isMock ? undefined : source.url,
+    url: articleHref(source.url),
   };
 }
 

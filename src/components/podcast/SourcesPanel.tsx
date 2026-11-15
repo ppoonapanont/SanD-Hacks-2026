@@ -1,3 +1,5 @@
+import type { CSSProperties } from "react";
+
 import type { ExperienceView } from "./deriveExperienceView";
 
 export interface SourcesPanelProps {
@@ -23,23 +25,8 @@ export function SourcesPanel({ view }: SourcesPanelProps) {
         Sources · {view.sourceCount}
       </h3>
       {view.sourceList.map((s) => {
-        const Wrapper = s.url ? "a" : "div";
-        return (
-          <Wrapper
-            key={s.n}
-            {...(s.url ? { href: s.url, target: "_blank", rel: "noopener noreferrer" } : {})}
-            style={{
-              display: "flex",
-              gap: 12,
-              padding: 12,
-              borderRadius: 14,
-              border: `1px solid ${s.border}`,
-              background: s.background,
-              textDecoration: "none",
-              color: "inherit",
-              cursor: s.url ? "pointer" : "default",
-            }}
-          >
+        const body = (
+          <>
             <span
               style={{
                 width: 26,
@@ -57,12 +44,21 @@ export function SourcesPanel({ view }: SourcesPanelProps) {
             >
               {s.n}
             </span>
-            <div style={{ display: "flex", flexDirection: "column", gap: 4, minWidth: 0 }}>
-              <span style={{ fontSize: 14, fontWeight: 500, lineHeight: 1.35, textDecoration: s.url ? "underline" : "none" }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: 4, minWidth: 0, flex: 1 }}>
+              <span
+                style={{
+                  fontSize: 14,
+                  fontWeight: 500,
+                  lineHeight: 1.35,
+                  textDecoration: s.url ? "underline" : "none",
+                  textUnderlineOffset: 2,
+                }}
+              >
                 {s.title}
               </span>
               <span style={{ fontSize: 12, color: "#b6bfc1" }}>
                 {s.outlet} · {s.date}
+                {s.url ? " · Open article" : ""}
               </span>
               {s.isLive && (
                 <span
@@ -82,7 +78,58 @@ export function SourcesPanel({ view }: SourcesPanelProps) {
                 </span>
               )}
             </div>
-          </Wrapper>
+            {s.url ? (
+              <svg
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="#97acc8"
+                strokeWidth={2}
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+                style={{ flex: "none", marginTop: 4 }}
+              >
+                <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+                <polyline points="15 3 21 3 21 9" />
+                <line x1="10" y1="14" x2="21" y2="3" />
+              </svg>
+            ) : null}
+          </>
+        );
+
+        const sharedStyle: CSSProperties = {
+          display: "flex",
+          gap: 12,
+          padding: 12,
+          borderRadius: 14,
+          border: `1px solid ${s.border}`,
+          background: s.background,
+          textDecoration: "none",
+          color: "inherit",
+          cursor: s.url ? "pointer" : "default",
+        };
+
+        if (s.url) {
+          return (
+            <a
+              key={s.n}
+              href={s.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label={`Open source ${s.n}: ${s.title}`}
+              style={sharedStyle}
+            >
+              {body}
+            </a>
+          );
+        }
+
+        return (
+          <div key={s.n} style={sharedStyle}>
+            {body}
+          </div>
         );
       })}
     </section>

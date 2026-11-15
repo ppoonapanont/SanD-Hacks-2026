@@ -8,7 +8,7 @@ Our core differentiator is that users do not just listen to an AI-generated podc
 
 # Implementation Status
 
-Last updated: 2026-11-14 (**v1** tagged conceptually — stable voice/transcript sync, **without Mastra-driven generation**)
+Last updated: 2026-11-14 (**current:** live `/next` with structured turn plans + speech sanitization; v1 remains the pre-Mastra restore point)
 
 Status key: `COMPLETE` | `PARTIAL` | `STUB` | `NOT STARTED`
 
@@ -16,9 +16,10 @@ Status key: `COMPLETE` | `PARTIAL` | `STUB` | `NOT STARTED`
 
 | Version | Commit | Meaning |
 |---------|--------|---------|
-| **v1** | `6c97d05` — *Stabilize Experience voice/transcript sync before playback.* | Stable Experience baseline **before** Mastra multi-agent generation. Direct Gemini writes the full episode script; ElevenLabs TTS is **preloaded before playback**; transcript uses a `listenN` cursor locked to the speaking line; scrubber follows real clip progress; generate/interrupt races guarded by epoch refs. Interrupt/resume via Gemini moderator in `interact.ts` / `resume.ts`. Mastra package may be installed for Studio scaffolding, but **episode generation is not Mastra-orchestrated**. Treat this commit as the restore point for “pre-Mastra product.” |
+| **v1** | `6c97d05` — *Stabilize Experience voice/transcript sync before playback.* | Stable Experience baseline **before** Mastra multi-agent generation. Direct Gemini writes the full episode script; ElevenLabs TTS is **preloaded before playback**; transcript uses a `listenN` cursor locked to the speaking line; scrubber follows real clip progress; generate/interrupt races guarded by epoch refs. Interrupt/resume via Gemini moderator in `interact.ts` / `resume.ts`. Treat this commit as the restore point for “pre-Mastra product.” |
+| **current (post-v1)** | `9cc4faa`+ — live `/next` + playback hardening | Experience generates with `live: true`: Producer brief + cold-open seed, then **POST `/api/podcast/next`** writes each line while playing (`generationMode: "live"`). Heuristic speaker routing + one Gemini call per line (fast path); interrupt still uses Mastra Moderator + Guest agents. Conversation moves, speech-timed timestamps, ~2-line `/next` buffer, scrubber/pause/resume fixes, Bright Data SERP retries before mock fallback. Full-script generate still available when `live: false`. |
 
-When adding Mastra-driven prep/live `/next`, branch from or compare against **v1 (`6c97d05`)**.
+Compare against **v1 (`6c97d05`)** when diagnosing regressions in voice/transcript sync.
 
 ## Phase 0 — Shared foundation
 
@@ -41,9 +42,9 @@ When adding Mastra-driven prep/live `/next`, branch from or compare against **v1
 
 | Method | Path | Status | Owner |
 |--------|------|--------|-------|
-| POST | `/api/podcast/generate` | COMPLETE | Dev 1 — News Engine + Gemini script → session |
-| POST | `/api/podcast/next` | COMPLETE | Dev 1 — advances precomputed session turns |
-| POST | `/api/podcast/interact` | COMPLETE | Dev 1 — moderator → optional research → guest replies |
+| POST | `/api/podcast/generate` | COMPLETE | Dev 1 — News + Producer; `live: true` seeds episode, `live: false` full script |
+| POST | `/api/podcast/next` | COMPLETE | Dev 1 — **live:** `advancePodcastTurn` (heuristic route + Gemini line); **script:** cursor over precomputed turns |
+| POST | `/api/podcast/interact` | COMPLETE | Dev 1 — Mastra Moderator → optional research → Guest agents |
 | POST | `/api/podcast/resume` | COMPLETE | Dev 1 — clears interrupt state + host bridge turn |
 | GET | `/api/podcast/history` | COMPLETE | Shared (in-memory) |
 | GET | `/api/podcast/:id` | COMPLETE | Shared (in-memory) |
@@ -57,10 +58,10 @@ When adding Mastra-driven prep/live `/next`, branch from or compare against **v1
 
 | Item | Status | Location / notes |
 |------|--------|------------------|
-| Bright Data integration | COMPLETE | SERP news search + Unlocker article markdown scrape; response body unwrap |
-| News collection | COMPLETE | `fetchNewsForConfig` via Google News SERP (`tbm=nws`); mock fallback when unset/fails |
+| Bright Data integration | COMPLETE | SERP news search + Unlocker article markdown scrape; response body unwrap; SERP retries on empty body |
+| News collection | COMPLETE | `fetchNewsForConfig` via Google News SERP (`tbm=nws`); mock fallback only after retries fail / unset keys |
 | Article analysis | COMPLETE | Unlocker scrape + Gemini structured summary/claims (`src/services/news/enrich.ts`); heuristic fallback |
-| Source management | COMPLETE | Map → `NewsSource`, URL/title dedupe, scrapable-URL filter, `isMock` labeling |
+| Source management | COMPLETE | Map → `NewsSource`, URL/title dedupe, scrapable-URL filter, `isMock` labeling; Sources panel opens http(s) article links |
 | Claim cross-referencing | COMPLETE | Related-story grouping + Gemini agreements/conflicts/uncertain (`crossReference.ts`) |
 
 **News Engine complete.**
@@ -69,21 +70,21 @@ When adding Mastra-driven prep/live `/next`, branch from or compare against **v1
 
 | Item | Status | Location / notes |
 |------|--------|------------------|
-| Gemini integration | COMPLETE | `@google/genai` for news analysis + episode script (`src/services/podcast/generate.ts`) |
-| Episode outlines | COMPLETE | Chapters + timed H/A/B/C lines on 720s baseline; adapted for Experience |
-| Duration and depth control | COMPLETE | Passed into Gemini prompt; lines re-paced evenly after generation |
-| Custom guest personalities | COMPLETE | Experience guest map + freeform Create guest builder (name/expertise/personality/voice/avatar) → PodcastConfig |
-| Structured conversation generation | COMPLETE | **v1:** `/generate` builds full script; Experience preloads TTS then plays `liveScript`; `/next` still walks precomputed turns |
+| Gemini integration | COMPLETE | `@google/genai` + Mastra Google router; default `gemini-3.1-flash-lite` (quota fallbacks in `generateJson`) |
+| Episode outlines | COMPLETE | Producer brief → outline topics; live seed cold-open; script mode still uses timed H/A/B/C lines |
+| Duration and depth control | COMPLETE | Soft/hard turn caps from duration (`nextTurn.ts`); depth passed into prompts |
+| Custom guest personalities | COMPLETE | Experience guest map + freeform Create guest builder → PodcastConfig |
+| Structured conversation generation | COMPLETE | **Current:** live `/generate` + `/next` (`nextTurn.ts`, conversation moves, speech timing); **v1 path:** full-script generate still supported |
 
-**Podcast Generator MVP complete** (**v1 = direct Gemini, not Mastra**).
+**Podcast Generator:** live turn-by-turn is the Experience default; full-script remains for non-live / testing.
 
 ### Task 3: Agent System
 
 | Item | Status | Location / notes |
 |------|--------|------------------|
-| Mastra agents and workflows | PARTIAL | **v1+:** research + **Producer** + **Moderator** + **Guest agents**; Experience uses **live `/next`** turn-by-turn (`generationMode: "live"`) with full-script generate still available |
-| Moderator logic | COMPLETE | Mastra Moderator plans who answers + research need in `moderatorPlan.ts` / `interact.ts` |
-| Guest agent coordination | COMPLETE | Mastra Guest agents (`createGuestAgent`) reply in character on interrupt; targetGuestId supported |
+| Mastra agents and workflows | PARTIAL | Producer (outline) + Moderator/Guests on **interrupt**; live `/next` uses fast heuristic route + Gemini line (Mastra Guest agent path kept for interact). Fact-check agent not started |
+| Moderator logic | COMPLETE | Interrupt: Mastra Moderator. Live `/next`: structured `planNextTurn` (pending questions, story focus) — plans are never spoken |
+| Guest agent coordination | COMPLETE | Interrupt: Mastra guests. Live `/next`: Gemini-in-character + `sanitizeSpokenText` / natural fallbacks |
 | User question handling | COMPLETE | `/api/podcast/interact` + Experience `beginInterrupt` (demo fallback) |
 | Live research | COMPLETE | Optional Bright Data via `fetchNewsForConfig` on interrupt; mock fallback |
 | Conversation memory | PARTIAL | In-memory sessions + interrupt side-store; no Mastra memory / Neon |
@@ -106,8 +107,8 @@ When adding Mastra-driven prep/live `/next`, branch from or compare against **v1
 | ElevenLabs integration | COMPLETE | `src/services/elevenlabs/` TTS + STT clients |
 | Audio generation | COMPLETE | `/api/audio/generate` → MP3 blob URLs |
 | Multi-speaker playback | COMPLETE | Per-guest ElevenLabs voice IDs; exclusive clip per line |
-| Audio queue management | COMPLETE | **v1:** `useTurnAudio.preload` before play; text+voice cache keys; `clipExhausted` blocks replay; `timeupdate` drives scrubber |
-| Playback controls | COMPLETE | Play/pause; listen mode advances on clip end via `listenN` |
+| Audio queue management | COMPLETE | Exclusive clips + prefetch; `clipExhausted`; same-src `playExclusive` re-arm; live lines append before TTS finishes warming |
+| Playback controls | COMPLETE | Play/pause (±15/scrubber); pause never restarts when clock past duration; interrupt join resumes mid-clip |
 
 ### Task 3: Interactive Podcast UI
 
@@ -115,11 +116,11 @@ When adding Mastra-driven prep/live `/next`, branch from or compare against **v1
 |------|--------|-------|
 | Podcast player | COMPLETE | Experience player (`/configure`) |
 | Speaker visualization | COMPLETE | Active speaker / EQ treatment in Experience |
-| Live transcripts | COMPLETE | **v1:** `listenN` cursor locks active line to spoken clip (no mid-line flicker) |
+| Live transcripts | COMPLETE | Full scrollback; `listenN` / `joinN` locked to spoken clip; live timestamps stamped at speak start |
 | Microphone input | COMPLETE | Record → `/api/audio/transcribe` |
-| Interruption controls | COMPLETE | Research → live join lines from `/interact` (incl. `targetGuestId`); resume via `/resume` |
+| Interruption controls | COMPLETE | Research → join lines from `/interact` (`targetGuestId`); pause/resume mid-join; resume episode via `/resume` |
 | Guest addressing | COMPLETE | Composer Address chip row shapes `targetGuestId` on `/interact` |
-| Conversation experience | COMPLETE | Listen + interrupt + resume loop live (demo fallback if no session) |
+| Conversation experience | COMPLETE | Live listen (`/next` buffer) + interrupt + resume (demo fallback if no session) |
 
 ## Shared responsibilities
 
@@ -129,7 +130,7 @@ When adding Mastra-driven prep/live `/next`, branch from or compare against **v1
 | API contracts | COMPLETE | Types locked; generate/next/audio implemented |
 | Frontend and backend integration | COMPLETE | Generate + TTS/STT + interact/resume wired into Experience |
 | Vercel deployment | PARTIAL | Build verified locally; not yet imported/deployed on Vercel |
-| Testing | NOT STARTED | |
+| Testing | PARTIAL | Vitest: conversationMoves, conversationState, spokenText, speechTiming |
 | Hackathon presentation | NOT STARTED | |
 | Sponsor track submissions | NOT STARTED | |
 
@@ -143,10 +144,10 @@ When adding Mastra-driven prep/live `/next`, branch from or compare against **v1
 | Podcast configuration UI | COMPLETE (Experience setup) |
 | Duration and depth controls | COMPLETE |
 | Multiple customizable AI guests | COMPLETE (demo presets + freeform Create guest builder) |
-| Mastra podcast generation workflow | PARTIAL (**v1 baseline:** direct Gemini generate; Mastra Studio scaffolding only — multi-agent generate is post-v1) |
-| Multi-speaker ElevenLabs audio | COMPLETE (**v1:** preload-all TTS, transcript-locked exclusive clips) |
+| Mastra podcast generation workflow | PARTIAL (Producer on generate; live `/next` fast path; Moderator/Guests on interrupt; Fact-check not started) |
+| Multi-speaker ElevenLabs audio | COMPLETE (preload/prefetch + transcript-locked exclusive clips; live buffer) |
 | Functional podcast player | COMPLETE (Experience) |
-| Basic source citations | COMPLETE (News Engine → Experience sources panel) |
+| Basic source citations | COMPLETE (News Engine → Sources panel with article links when URL present) |
 
 ### P1 — Core Differentiation
 
@@ -155,7 +156,7 @@ When adding Mastra-driven prep/live `/next`, branch from or compare against **v1
 | Real interrupt via `/api/podcast/interact` | COMPLETE (Experience wired; demo fallback without session) |
 | Resume via `/api/podcast/resume` | COMPLETE |
 | Live research during interrupt | COMPLETE (Bright Data + mock fallback) |
-| Mastra moderator / guest agents | COMPLETE (moderator + research agents with tools; guest replies still via interact service) |
+| Mastra moderator / guest agents | COMPLETE (Moderator + Guest agents on interrupt; research agent/tools; live `/next` uses heuristic + Gemini line) |
 
 # Core Features
 
@@ -847,27 +848,27 @@ Primary paths: `src/services/bright-data/`, `src/services/news/`, `src/services/
 
 ### Task 1: News Engine
 
-- Bright Data integration. — COMPLETE
-- News collection. — COMPLETE (SERP + mock fallback)
+- Bright Data integration. — COMPLETE (SERP retries on empty body)
+- News collection. — COMPLETE (SERP + mock only after retries / unset keys)
 - Article analysis. — COMPLETE (Unlocker + Gemini)
-- Source management. — COMPLETE
+- Source management. — COMPLETE (Sources panel links to article URLs)
 - Claim cross-referencing. — COMPLETE (Gemini + heuristic fallback)
 
 ### Task 2: Podcast Generator
 
-- Gemini integration. — COMPLETE (news + episode script)
-- Episode outlines. — COMPLETE
-- Duration and depth control. — COMPLETE
+- Gemini integration. — COMPLETE (news + live `/next` lines + script path; model + quota fallbacks)
+- Episode outlines. — COMPLETE (Producer brief + live seed)
+- Duration and depth control. — COMPLETE (turn caps + prompts)
 - Custom guest personalities. — COMPLETE (mapped demo guests + freeform Create guest builder)
-- Structured conversation generation. — COMPLETE (**v1** `6c97d05`: full-script generate + TTS preload; not Mastra)
+- Structured conversation generation. — COMPLETE (live `/next` default in Experience; full-script when `live: false`)
 
 ### Task 3: Agent System
 
-- Mastra agents and workflows. — PARTIAL (**v1:** package + Studio scaffolding; multi-agent generate is post-v1)
-- Moderator logic. — COMPLETE
-- Guest agent coordination. — COMPLETE
+- Mastra agents and workflows. — PARTIAL (Producer + interrupt Moderator/Guests; live `/next` fast path; Fact-check NOT STARTED)
+- Moderator logic. — COMPLETE (interrupt Mastra; live heuristic moves)
+- Guest agent coordination. — COMPLETE (interrupt Mastra agents; live Gemini-in-character lines)
 - User question handling. — COMPLETE (`/interact`)
-- Live research. — COMPLETE (on interrupt)
+- Live research. — COMPLETE (on interrupt; SERP retries before mock)
 - Conversation memory. — PARTIAL (in-memory + interrupt store)
 
 ## Developer 2 — Frontend and Audio
@@ -886,18 +887,18 @@ Primary paths: `src/components/`, `src/app/` pages, `src/services/elevenlabs/`, 
 - ElevenLabs integration. — COMPLETE
 - Audio generation. — COMPLETE (`/api/audio/generate`)
 - Multi-speaker playback. — COMPLETE
-- Audio queue management. — COMPLETE (exclusive clip + prefetch)
-- Playback controls. — COMPLETE
+- Audio queue management. — COMPLETE (exclusive clip + prefetch; pause/resume re-arm)
+- Playback controls. — COMPLETE (pause mid-episode / mid-interrupt; no false restart-at-duration)
 
 ### Task 3: Interactive Podcast UI
 
 - Podcast player. — COMPLETE (Experience on `/configure`)
 - Speaker visualization. — COMPLETE
-- Live transcripts. — COMPLETE (**v1:** `listenN` locked to spoken clip)
+- Live transcripts. — COMPLETE (full scrollback; listen/join cursors; speech-start timestamps)
 - Microphone input. — COMPLETE (STT)
 - Interruption controls. — COMPLETE (`/interact` + `/resume`, with `targetGuestId`)
 - Guest addressing. — COMPLETE (Address chips + targetGuestId)
-- Conversation experience. — COMPLETE (listen + interrupt + resume)
+- Conversation experience. — COMPLETE (live `/next` + interrupt + resume)
 
 ## Shared Responsibilities
 
@@ -905,7 +906,7 @@ Primary paths: `src/components/`, `src/app/` pages, `src/services/elevenlabs/`, 
 - API contracts. — COMPLETE (generate/next/audio/interact/resume live)
 - Frontend and backend integration. — COMPLETE
 - Vercel deployment. — PARTIAL (build verified locally)
-- Testing. — NOT STARTED
+- Testing. — PARTIAL (Vitest: conversationMoves + speechTiming)
 - Hackathon presentation. — NOT STARTED
 - Sponsor track submissions. — NOT STARTED
 

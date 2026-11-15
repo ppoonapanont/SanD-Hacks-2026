@@ -15,8 +15,19 @@ export {
 export {
   guestStreakSinceHost,
   heuristicNextMove,
+  planNextTurn,
 } from "./conversationMoves";
-export type { ConversationMove } from "./conversationMoves";
+export type { ConversationMove, TurnPlan } from "./conversationMoves";
+export {
+  deriveConversationState,
+  findAddressedGuestId,
+  resolveStoryFocus,
+} from "./conversationState";
+export {
+  finalizeSpokenLine,
+  looksLikePlanningSpeech,
+  sanitizeSpokenText,
+} from "./spokenText";
 export { runProducerBrief } from "./producerBrief";
 export type { ProducerBrief, ProducerSegment } from "./producerBrief";
 export { runModeratorPlan } from "./moderatorPlan";
