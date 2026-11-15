@@ -438,7 +438,7 @@ export function deriveExperienceView(state: ExperienceState): ExperienceView {
   }));
 
   const cited = new Set<number>();
-  const citeSource = mode === "joined" ? DEMO_JOIN_LINES.slice(0, state.joinN) : curLine ? [curLine] : [];
+  const citeSource = mode === "joined" ? joinScript.slice(0, state.joinN) : curLine ? [curLine] : [];
   citeSource.forEach((l) => (l.c ?? []).forEach((n) => cited.add(n)));
   const liveSourceIds = Object.keys(episodeSources)
     .map((key) => Number(key))

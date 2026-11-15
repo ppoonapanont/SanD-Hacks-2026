@@ -509,9 +509,9 @@ export function Experience() {
           note: "Pulling news and writing the panel script…",
           noteK: 0,
           sessionId: null,
-          liveScript: null,
-          liveSources: null,
-          liveJoinLines: null,
+          // Keep the previous script/sources in state while regenerating — the
+          // "generating" phase already hides the transcript on its own, but this
+          // way nothing ever briefly renders with a null/cleared script.
         };
       });
     },

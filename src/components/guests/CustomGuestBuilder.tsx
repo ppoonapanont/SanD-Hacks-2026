@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, type CSSProperties } from "react";
+import { useState, type CSSProperties } from "react";
 
 import { GuestAvatar } from "@/components/guests/GuestAvatar";
 import { GUEST_VOICE_OPTIONS, pickUnusedVoiceId } from "@/data/mock/guestVoices";
@@ -62,13 +62,17 @@ export function CustomGuestBuilder({
   );
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (!open) return;
-    setDraft(emptyCustomGuestDraft(usedVoiceIds));
-    setError(null);
-    // Only re-seed when the form opens; avoid fighting mid-edit voice picks.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open]);
+  // Re-seed the form each time it opens (but not while it stays open, so mid-edit
+  // voice picks aren't fought). Adjusting state during render — not an effect — is
+  // React's recommended way to reset state in response to a prop change.
+  const [prevOpen, setPrevOpen] = useState(open);
+  if (open !== prevOpen) {
+    setPrevOpen(open);
+    if (open) {
+      setDraft(emptyCustomGuestDraft(usedVoiceIds));
+      setError(null);
+    }
+  }
 
   const patch = (partial: Partial<CustomGuestInput>) => {
     setDraft((prev) => ({ ...prev, ...partial }));
