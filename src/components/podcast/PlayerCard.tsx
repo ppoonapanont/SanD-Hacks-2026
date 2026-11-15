@@ -284,9 +284,34 @@ export function PlayerCard({ view, handlers }: PlayerCardProps) {
                 </svg>
               </button>
             </div>
-            <span style={{ fontSize: 13, color: view.theme.sub, minWidth: 120, textAlign: "right" }}>
-              {view.depth} · {view.language}
-            </span>
+            <div style={{ display: "flex", alignItems: "center", gap: 14, justifyContent: "flex-end", minWidth: 120 }}>
+              <button
+                type="button"
+                onClick={handlers.endEpisode}
+                aria-label="End episode and start a new one"
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 6,
+                  padding: "8px 14px",
+                  borderRadius: 999,
+                  background: "transparent",
+                  border: `1px solid ${view.theme.line}`,
+                  color: view.theme.sub,
+                  fontSize: 13,
+                  fontWeight: 600,
+                  cursor: "pointer",
+                }}
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <rect x="6" y="6" width="12" height="12" rx="2" />
+                </svg>
+                End
+              </button>
+              <span style={{ fontSize: 13, color: view.theme.sub, textAlign: "right", whiteSpace: "nowrap" }}>
+                {view.depth} · {view.language}
+              </span>
+            </div>
           </div>
 
           {/* Fixed-height slot: the note pill mounts/unmounts inside it without
