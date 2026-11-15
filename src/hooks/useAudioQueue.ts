@@ -127,6 +127,40 @@ export function useAudioQueue() {
 
   const pause = useCallback(() => setPlaying(false), []);
 
+  /** True after natural `ended` until a new clip is loaded or a seek resets it. */
+  const isClipExhausted = useCallback(() => clipExhaustedRef.current, []);
+
+  /** Seek within the current clip (0..1). Used by scrub without restarting TTS. */
+  const seekFraction = useCallback((fraction: number) => {
+    const el = audioRef.current;
+    if (!el) return false;
+    const duration = Number.isFinite(el.duration) && el.duration > 0 ? el.duration : 0;
+    if (!duration) return false;
+    clipExhaustedRef.current = false;
+    el.currentTime = Math.max(0, Math.min(duration, fraction * duration));
+    return true;
+  }, []);
+
+  /** Seek within the current clip to an absolute offset in real seconds. */
+  const seekToSeconds = useCallback((seconds: number) => {
+    const el = audioRef.current;
+    if (!el) return false;
+    const duration = Number.isFinite(el.duration) && el.duration > 0 ? el.duration : 0;
+    if (!duration) return false;
+    clipExhaustedRef.current = false;
+    el.currentTime = Math.max(0, Math.min(duration, seconds));
+    return true;
+  }, []);
+
+  const getPlaybackPosition = useCallback(() => {
+    const el = audioRef.current;
+    if (!el) return { currentTime: 0, duration: 0 };
+    return {
+      currentTime: Number.isFinite(el.currentTime) ? el.currentTime : 0,
+      duration: Number.isFinite(el.duration) && el.duration > 0 ? el.duration : 0,
+    };
+  }, []);
+
   // Swap the audio source whenever the current item changes.
   useEffect(() => {
     const el = audioRef.current;
@@ -203,6 +237,10 @@ export function useAudioQueue() {
     playing,
     play,
     pause,
+    isClipExhausted,
+    seekFraction,
+    seekToSeconds,
+    getPlaybackPosition,
     enqueue,
     playExclusive,
     clear,
