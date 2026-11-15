@@ -16,7 +16,7 @@ import {
   type ConversationMove,
 } from "./conversationMoves";
 import { hostDisplayName } from "./guestMap";
-import { sanitizeHostSpokenLine } from "./hostLines";
+import { sanitizeHostSpokenLine, stripCitationMarkers } from "./hostLines";
 import { estimateSpeechSeconds, nextSpeechTimestamp } from "./speechTiming";
 
 /** Live /next must finish inside a spoken line (~8–12s). Keep LLM calls tight. */
@@ -473,7 +473,7 @@ async function generateGuestLine(
       { timeoutMs: LINE_TIMEOUT_MS },
     );
 
-    const text = String(structured.text ?? "").trim();
+    const text = stripCitationMarkers(String(structured.text ?? "").trim());
     if (!text) {
       errors.push(`Guest line ${guest.name}: empty`);
       return fallback;

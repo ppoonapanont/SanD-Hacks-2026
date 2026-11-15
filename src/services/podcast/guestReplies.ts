@@ -3,7 +3,7 @@ import { generateJson, isGeminiConfigured } from "@/services/gemini";
 import type { Guest, NewsSource } from "@/types";
 
 import { hostDisplayName } from "./guestMap";
-import { sanitizeHostSpokenLine } from "./hostLines";
+import { sanitizeHostSpokenLine, stripCitationMarkers } from "./hostLines";
 
 export interface StructuredGuestReply {
   guestId: string;
@@ -202,7 +202,7 @@ export async function runGuestReplies(input: {
     for (const reply of structured.replies ?? []) {
       const guestId = String(reply.guestId);
       if (!guestIds.has(guestId) || used.has(guestId)) continue;
-      const text = String(reply.text ?? "").trim();
+      const text = stripCitationMarkers(String(reply.text ?? "").trim());
       if (!text) continue;
       used.add(guestId);
       replies.push({
@@ -217,7 +217,7 @@ export async function runGuestReplies(input: {
     // Ensure every responder has a line (prefer raw agent text over heuristic).
     for (const guest of responders) {
       if (used.has(guest.id)) continue;
-      const raw = rawByGuest.get(guest.id)?.trim();
+      const raw = stripCitationMarkers(rawByGuest.get(guest.id)?.trim() ?? "");
       replies.push({
         guestId: guest.id,
         text: raw || fallbackReply(guest, message),
@@ -251,7 +251,9 @@ export async function runGuestReplies(input: {
     return {
       replies: responders.map((guest) => ({
         guestId: guest.id,
-        text: rawByGuest.get(guest.id)?.trim() || fallbackReply(guest, message),
+        text:
+          stripCitationMarkers(rawByGuest.get(guest.id)?.trim() ?? "") ||
+          fallbackReply(guest, message),
         sourceIndexes: [],
       })),
       closingHost: defaultClosing(hostName),

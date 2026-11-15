@@ -1,9 +1,24 @@
 /**
+ * Strips inline citation markers like "[1]" or "[2, 3]" — models cite via a
+ * separate sourceIndexes field, but sometimes also write the bracket notation
+ * inline since that's how sources are shown to them in the prompt. ElevenLabs
+ * reads literal brackets/numbers aloud, so this must run on every spoken line
+ * regardless of how well the model followed instructions.
+ */
+export function stripCitationMarkers(text: string): string {
+  return text
+    .replace(/\s*\[\s*\d+(?:\s*[,\-–]\s*\d+)*\s*\]/g, "")
+    .replace(/\s+([.,!?;:])/g, "$1")
+    .replace(/\s{2,}/g, " ")
+    .trim();
+}
+
+/**
  * Host lines are first-person. Models sometimes emit producer-style cues like
  * "Back to you, Mira…" — rewrite those so Mira never addresses herself.
  */
 export function sanitizeHostSpokenLine(text: string, hostName: string): string {
-  const raw = text.trim();
+  const raw = stripCitationMarkers(text.trim());
   if (!raw) return "";
 
   const name = hostName.trim() || "Mira";

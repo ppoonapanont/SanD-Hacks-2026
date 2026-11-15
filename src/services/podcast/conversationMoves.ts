@@ -106,6 +106,7 @@ export function spokenDialogueStyleRules(): string[] {
     "Do not restate points already made in recent turns.",
     "Examples or analogies are welcome when they clarify — keep them short.",
     "1–3 spoken sentences only. Output words to say aloud — no labels or stage directions.",
+    "Never write bracket citation markers like [1] in the text — cite only via sourceIndexes. This gets read aloud by text-to-speech, so literal brackets/numbers are never acceptable.",
   ];
 }
 
