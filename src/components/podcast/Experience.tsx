@@ -236,7 +236,10 @@ function advanceJoinPastTurn(
   if (prev.joinN - 1 !== idx) return prev;
 
   const script = prev.liveJoinLines ?? DEMO_JOIN_LINES;
-  if (idx + 1 >= script.length) return prev;
+  if (idx + 1 >= script.length) {
+    // Last interrupt line finished — stop so the UI can show resume actions.
+    return { ...prev, playing: false };
+  }
   return { ...prev, joinN: idx + 2, k: 0 };
 }
 
@@ -347,6 +350,22 @@ export function Experience() {
   useEffect(() => {
     if (!isSpeakingPhase || !state.playing) {
       turnAudio.pause();
+      return;
+    }
+
+    // Clip finished but transcript never advanced (missed `ended`) — nudge forward.
+    if (
+      activeLine &&
+      activeLineKey &&
+      activeLineKey === lastSpokenKeyRef.current &&
+      turnAudio.isClipExhausted()
+    ) {
+      const finishedKey = activeLineKey;
+      setState((prev) => {
+        const next = advancePastSpokenTurn(prev, finishedKey);
+        if (next !== prev) return next;
+        return prev.playing ? { ...prev, playing: false } : prev;
+      });
       return;
     }
 
@@ -611,11 +630,20 @@ export function Experience() {
           sources,
           result.session.sources,
         );
-        await startJoined(
-          joinLines.length ? joinLines : null,
+        const noteParts = [
+          result.moderatorUsed
+            ? `Moderator: ${result.moderatorSummary ?? "routed panel"}`
+            : null,
           result.usedMockResearch
             ? "Interrupt research used mock/fallback sources"
-            : "Panel answering your question",
+            : null,
+          !result.moderatorUsed && !result.usedMockResearch
+            ? "Panel answering your question"
+            : null,
+        ].filter(Boolean);
+        await startJoined(
+          joinLines.length ? joinLines : null,
+          noteParts.join(" · ") || "Panel answering your question",
           Object.keys(sources).length ? sources : undefined,
         );
       } catch (error) {

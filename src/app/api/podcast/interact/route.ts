@@ -30,13 +30,12 @@ export async function POST(request: Request) {
       targetGuestId: body.targetGuestId,
     });
 
-    const response: InteractResponse & {
-      usedMockResearch: boolean;
-      errors: string[];
-    } = {
+    const response: InteractResponse = {
       session: result.session,
       turns: result.turns,
       usedMockResearch: result.usedMockResearch,
+      moderatorUsed: result.moderatorUsed,
+      moderatorSummary: result.moderatorSummary,
       errors: result.errors,
     };
     return NextResponse.json(response);

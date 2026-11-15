@@ -604,7 +604,12 @@ export function deriveExperienceView(state: ExperienceState): ExperienceView {
     joinLines,
     joinTyping: mode === "joined" && !joinDone,
     joinDone,
-    nextSpeakerName: upcomingJoinLine ? profileFor(slot[upcomingJoinLine.s]).short : "",
+    // Show who is speaking now (active line), not the next queued guest.
+    nextSpeakerName: currentJoinLine
+      ? profileFor(slot[currentJoinLine.s]).short
+      : upcomingJoinLine
+        ? profileFor(slot[upcomingJoinLine.s]).short
+        : "",
     question: state.question,
     youBubble: isLight ? { bg: "#051230", fg: "#e7ebee" } : { bg: "#e7ebee", fg: "#051230" },
     hasNote: !!state.note && mode === "listen",

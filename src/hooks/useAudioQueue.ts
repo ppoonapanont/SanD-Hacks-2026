@@ -174,9 +174,13 @@ export function useAudioQueue() {
       clipExhaustedRef.current = false;
       el.src = nextSrc;
       el.load();
-      queueMicrotask(() => {
+      // Hold ignore through load + a frame so a stale `ended` from the previous
+      // clip cannot be lost mid-swap — cleared once the new clip can play.
+      const release = () => {
         ignoreEndedRef.current = false;
-      });
+      };
+      el.addEventListener("loadeddata", release, { once: true });
+      window.setTimeout(release, 500);
     }
     if (playing && !clipExhaustedRef.current) {
       void el.play().catch(() => {
@@ -202,19 +206,34 @@ export function useAudioQueue() {
     const el = audioRef.current;
     if (!el) return;
 
-    const handleEnded = () => {
-      if (ignoreEndedRef.current) return;
+    const finishClip = (turnId: string) => {
+      if (clipExhaustedRef.current) return;
       clipExhaustedRef.current = true;
       setPlaying(false);
+      onClipEndedRef.current?.(turnId);
+    };
+
+    const handleEnded = () => {
+      if (ignoreEndedRef.current) return;
       const finished = queueRef.current[currentIndexRef.current];
-      if (finished) onClipEndedRef.current?.(finished.turnId);
+      if (finished) finishClip(finished.turnId);
     };
 
     const handleTimeUpdate = () => {
-      if (ignoreEndedRef.current || clipExhaustedRef.current) return;
+      if (ignoreEndedRef.current) return;
       const item = queueRef.current[currentIndexRef.current];
       if (!item) return;
       const duration = Number.isFinite(el.duration) && el.duration > 0 ? el.duration : 0;
+      // Some browsers skip `ended` after pause/src races — treat near-end as finished.
+      if (
+        !clipExhaustedRef.current &&
+        duration > 0 &&
+        el.currentTime >= duration - 0.08
+      ) {
+        finishClip(item.turnId);
+        return;
+      }
+      if (clipExhaustedRef.current) return;
       onTimeUpdateRef.current?.({
         turnId: item.turnId,
         currentTime: el.currentTime,
