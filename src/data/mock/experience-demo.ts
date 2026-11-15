@@ -43,8 +43,8 @@ export const HOST_PROFILE = {
   radius: "50%",
   initials: "Mi",
   avatarKey: "host" as AvatarKey,
-  /** ElevenLabs stock voice "Alice" (Clear, Engaging Educator — female, British). */
-  voiceId: "Xb7hH8MSUJpSbSDYk0k2",
+  /** ElevenLabs stock voice "Jessica" (Playful, Bright, Warm — female, American). */
+  voiceId: "cgSgspJ2msm6clMCkdW9",
 };
 
 export const DEMO_GUESTS: Record<GuestKey, DemoGuestProfile> = {
