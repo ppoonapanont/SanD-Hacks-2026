@@ -4,7 +4,7 @@ import type { ConversationTurn, PodcastSession } from "@/types";
 import { createId } from "@/utils/id";
 
 import { hostDisplayName } from "./guestMap";
-import { sanitizeHostSpokenLine } from "./interact";
+import { sanitizeHostSpokenLine } from "./hostLines";
 import { clearInterruptRecord, getInterruptRecord } from "./interruptStore";
 
 function sanitizeResumeHostLine(text: string, hostName: string): string {

@@ -100,12 +100,12 @@ function advanceListenPastTurn(
 
   const next = script[idx + 1];
   if (!next) {
-    return { ...prev, t: prev.duration * 60, playing: false };
+    return { ...prev, playing: false };
   }
+  // Keep real elapsed clock continuous — do not jump to script baseline timestamps.
   return {
     ...prev,
     listenN: idx + 2,
-    t: scaleT(next.t, prev.duration),
     playing: true,
   };
 }
@@ -128,6 +128,101 @@ function speakableFromScript(
   });
 }
 
+type ListenSkipPlan = {
+  t: number;
+  listenN: number;
+  /** Absolute offset to seek in the *current* loaded clip, if any. */
+  seekSeconds: number | null;
+  /** Offset to apply once a new line's clip loads (negative = from end). */
+  pendingSeekSeconds: number | null;
+  clearSpoken: boolean;
+  anchor: number;
+};
+
+/**
+ * Pure ±15 plan (no audio side effects). Safe under Strict Mode double-invoke.
+ * Clock is real seconds: 1s of audio ≈ 1s on the counter.
+ */
+function planListenSkip(
+  prev: ExperienceState,
+  deltaSec: number,
+  currentTurnId: string | null,
+  position: { currentTime: number; duration: number },
+): ListenSkipPlan {
+  const total = prev.duration * 60;
+  const targetT = Math.max(0, Math.min(total, prev.t + deltaSec));
+  const idx = prev.listenN - 1;
+  const script = prev.liveScript ?? DEMO_SCRIPT;
+
+  if (idx < 0 || !script[idx] || currentTurnId !== `L${idx}`) {
+    return {
+      t: targetT,
+      listenN: prev.listenN,
+      seekSeconds: null,
+      pendingSeekSeconds: null,
+      clearSpoken: true,
+      anchor: targetT,
+    };
+  }
+
+  const { currentTime, duration } = position;
+  if (!(duration > 0)) {
+    return {
+      t: targetT,
+      listenN: prev.listenN,
+      seekSeconds: null,
+      pendingSeekSeconds: null,
+      clearSpoken: false,
+      anchor: targetT,
+    };
+  }
+
+  const nextTime = currentTime + deltaSec;
+  if (nextTime >= 0 && nextTime <= duration) {
+    return {
+      t: targetT,
+      listenN: prev.listenN,
+      seekSeconds: nextTime,
+      pendingSeekSeconds: null,
+      clearSpoken: false,
+      anchor: targetT - nextTime,
+    };
+  }
+
+  if (nextTime > duration && script[idx + 1]) {
+    const overflow = nextTime - duration;
+    return {
+      t: targetT,
+      listenN: idx + 2,
+      seekSeconds: null,
+      pendingSeekSeconds: overflow,
+      clearSpoken: true,
+      anchor: targetT - overflow,
+    };
+  }
+
+  if (nextTime < 0 && idx > 0) {
+    return {
+      t: targetT,
+      listenN: idx, // previous line (1-based index == idx)
+      seekSeconds: null,
+      pendingSeekSeconds: nextTime, // negative → from end of previous clip
+      clearSpoken: true,
+      anchor: targetT,
+    };
+  }
+
+  const clamped = Math.max(0, Math.min(duration, nextTime));
+  return {
+    t: targetT,
+    listenN: prev.listenN,
+    seekSeconds: clamped,
+    pendingSeekSeconds: null,
+    clearSpoken: false,
+    anchor: targetT - clamped,
+  };
+}
+
 function advanceJoinPastTurn(
   prev: ExperienceState,
   turnId: string,
@@ -141,7 +236,10 @@ function advanceJoinPastTurn(
   if (prev.joinN - 1 !== idx) return prev;
 
   const script = prev.liveJoinLines ?? DEMO_JOIN_LINES;
-  if (idx + 1 >= script.length) return prev;
+  if (idx + 1 >= script.length) {
+    // Last interrupt line finished — stop so the UI can show resume actions.
+    return { ...prev, playing: false };
+  }
   return { ...prev, joinN: idx + 2, k: 0 };
 }
 
@@ -167,12 +265,24 @@ export function Experience() {
   /** Bumps on each generate/interrupt so stale async completions cannot rewind the UI. */
   const generateEpochRef = useRef(0);
   const interruptEpochRef = useRef(0);
+  /** Ignore audio timeupdate briefly after ±15 / scrub so the scrubber doesn't snap back. */
+  const seekIgnoreUntilRef = useRef(0);
+  /** `t = lineClockAnchor + audio.currentTime` so the counter ticks in real seconds. */
+  const lineClockAnchorRef = useRef(0);
+  /** After a cross-line ±15, seek into the new clip once it loads (seconds, or negative = from end). */
+  const pendingSeekSecondsRef = useRef<number | null>(null);
+  /** Blocks stacked ±15 from double-clicks / Strict Mode side-effect duplication. */
+  const skipLockRef = useRef(false);
+  const stateRef = useRef(state);
   // Read by useTurnAudio once a (possibly async) clip is actually ready, so a generation
   // request that resolves after the user hits pause doesn't force playback back on.
   const playingRef = useRef(state.playing);
   useEffect(() => {
     playingRef.current = state.playing;
   }, [state.playing]);
+  useEffect(() => {
+    stateRef.current = state;
+  }, [state]);
 
   useEffect(() => {
     const id = setInterval(() => {
@@ -242,9 +352,73 @@ export function Experience() {
       turnAudio.pause();
       return;
     }
+
+    // Clip finished but transcript never advanced (missed `ended`) — nudge forward.
+    if (
+      activeLine &&
+      activeLineKey &&
+      activeLineKey === lastSpokenKeyRef.current &&
+      turnAudio.isClipExhausted()
+    ) {
+      const finishedKey = activeLineKey;
+      setState((prev) => {
+        const next = advancePastSpokenTurn(prev, finishedKey);
+        if (next !== prev) return next;
+        return prev.playing ? { ...prev, playing: false } : prev;
+      });
+      return;
+    }
+
+    // Same line still loaded (e.g. pause → ±15 → resume): keep currentTime, just play.
+    // Re-speaking would reload the clip from 0 and rewrite the clock anchor.
+    if (
+      activeLine &&
+      activeLineKey === lastSpokenKeyRef.current &&
+      turnAudio.current?.turnId === activeLineKey &&
+      !turnAudio.isClipExhausted()
+    ) {
+      // Some browsers drop currentTime seeks while paused — re-assert from the clock.
+      const pos = turnAudio.getPlaybackPosition();
+      const expected = stateRef.current.t - lineClockAnchorRef.current;
+      if (
+        pos.duration > 0 &&
+        Number.isFinite(expected) &&
+        expected >= 0 &&
+        Math.abs(pos.currentTime - expected) > 0.35
+      ) {
+        turnAudio.seekToSeconds(Math.min(pos.duration, expected));
+        seekIgnoreUntilRef.current = Date.now() + 200;
+      }
+      turnAudio.play();
+      return;
+    }
+
     // Only start TTS when the active line changes — never replay an exhausted clip.
     if (activeLine && activeLineKey !== lastSpokenKeyRef.current) {
       lastSpokenKeyRef.current = activeLineKey;
+      // Use live state — effect closures can still see pre-skip `t`.
+      const clockT = stateRef.current.t;
+      const pending = pendingSeekSecondsRef.current;
+      // If we're replacing a clip that already had a within-line seek, keep that offset
+      // so playExclusive/load cannot drop the scrubber back to the line start.
+      const existingPos = turnAudio.getPlaybackPosition();
+      const keepOffset =
+        pending == null &&
+        turnAudio.current?.turnId === activeLineKey &&
+        existingPos.currentTime > 0.05
+          ? existingPos.currentTime
+          : null;
+      const startOffset =
+        pending == null
+          ? keepOffset ?? 0
+          : pending >= 0
+            ? pending
+            : 0;
+      lineClockAnchorRef.current = Math.max(0, clockT - startOffset);
+      if (keepOffset != null && pending == null) {
+        pendingSeekSecondsRef.current = keepOffset;
+      }
+
       turnAudio.speak(
         {
           turnId: activeLine.key,
@@ -255,13 +429,41 @@ export function Experience() {
         },
         () => playingRef.current,
       );
+
+      // Apply cross-line ±15 remainder (or preserved within-line offset) once clip is ready.
+      const pendingAfter = pendingSeekSecondsRef.current;
+      if (pendingAfter != null) {
+        const applyPending = () => {
+          if (turnAudio.current?.turnId !== activeLineKey) return false;
+          const { duration } = turnAudio.getPlaybackPosition();
+          if (!(duration > 0)) return false;
+          const offset =
+            pendingAfter >= 0
+              ? Math.min(pendingAfter, duration)
+              : Math.max(0, duration + pendingAfter);
+          turnAudio.seekToSeconds(offset);
+          lineClockAnchorRef.current = Math.max(0, stateRef.current.t - offset);
+          pendingSeekSecondsRef.current = null;
+          seekIgnoreUntilRef.current = Date.now() + 200;
+          return true;
+        };
+        if (!applyPending()) {
+          window.setTimeout(() => {
+            applyPending();
+          }, 120);
+          window.setTimeout(() => {
+            applyPending();
+          }, 400);
+        }
+      }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isSpeakingPhase, state.mode, state.playing, activeLineKey]);
 
-  // Drive the scrubber from real audio progress within the current line window.
+  // Drive the scrubber 1:1 with real audio seconds (not stretched script gaps).
   useEffect(() => {
     turnAudio.setOnTimeUpdate((info) => {
+      if (Date.now() < seekIgnoreUntilRef.current) return;
       setState((prev) => {
         if (prev.phase !== "episode" || prev.mode !== "listen" || !prev.playing) {
           return prev;
@@ -271,20 +473,10 @@ export function Experience() {
         const idx = Number(match[1]);
         if (prev.listenN - 1 !== idx) return prev;
 
-        const script = prev.liveScript ?? DEMO_SCRIPT;
-        const line = script[idx];
-        if (!line) return prev;
-        const start = scaleT(line.t, prev.duration);
-        const next = script[idx + 1];
-        const end = next ? scaleT(next.t, prev.duration) : prev.duration * 60;
-        const span = Math.max(0.01, end - start);
-        const frac =
-          info.duration > 0
-            ? Math.min(1, Math.max(0, info.currentTime / info.duration))
-            : 0;
-        const t = start + span * frac;
-        // Avoid noisy re-renders for sub-100ms scrubber jitter.
-        if (Math.abs(t - prev.t) < 0.08) return prev;
+        const total = prev.duration * 60;
+        const t = Math.min(total, lineClockAnchorRef.current + info.currentTime);
+        // Smooth scrubber (~20hz); mm:ss label floors via formatSeconds.
+        if (Math.abs(t - prev.t) < 0.05) return prev;
         return { ...prev, t };
       });
     });
@@ -438,11 +630,25 @@ export function Experience() {
           sources,
           result.session.sources,
         );
-        await startJoined(
-          joinLines.length ? joinLines : null,
+        const noteParts = [
+          result.moderatorUsed
+            ? `Moderator: ${result.moderatorSummary ?? "routed panel"}`
+            : null,
+          result.guestsUsed
+            ? result.guestsSummary ?? "Guest agents replied"
+            : null,
           result.usedMockResearch
             ? "Interrupt research used mock/fallback sources"
-            : "Panel answering your question",
+            : null,
+          !result.moderatorUsed &&
+          !result.guestsUsed &&
+          !result.usedMockResearch
+            ? "Panel answering your question"
+            : null,
+        ].filter(Boolean);
+        await startJoined(
+          joinLines.length ? joinLines : null,
+          noteParts.join(" · ") || "Panel answering your question",
           Object.keys(sources).length ? sources : undefined,
         );
       } catch (error) {
@@ -586,6 +792,9 @@ export function Experience() {
           if (!stillCurrent()) return;
 
           lastSpokenKeyRef.current = null;
+          lineClockAnchorRef.current = 0;
+          pendingSeekSecondsRef.current = null;
+          seekIgnoreUntilRef.current = 0;
           setState((current) => ({
             ...current,
             phase: "episode",
@@ -648,38 +857,93 @@ export function Experience() {
         }
       })();
     },
-    seekTo: (seconds) =>
-      setState((prev) => {
-        const t = seconds + 0.01;
-        const script = prev.liveScript ?? DEMO_SCRIPT;
-        const idx = Math.max(0, activeScriptIndex(script, t, prev.duration));
-        lastSpokenKeyRef.current = null;
-        return { ...prev, t, listenN: idx + 1, openCite: null };
-      }),
-    seekFraction: (fraction) =>
-      setState((prev) => {
-        const t = fraction * prev.duration * 60;
-        const script = prev.liveScript ?? DEMO_SCRIPT;
-        const idx = Math.max(0, activeScriptIndex(script, t, prev.duration));
-        lastSpokenKeyRef.current = null;
-        return { ...prev, t, listenN: idx + 1, openCite: null };
-      }),
-    back15: () =>
-      setState((prev) => {
-        const t = Math.max(0, prev.t - 15);
-        const script = prev.liveScript ?? DEMO_SCRIPT;
-        const idx = Math.max(0, activeScriptIndex(script, t, prev.duration));
-        lastSpokenKeyRef.current = null;
-        return { ...prev, t, listenN: idx + 1 };
-      }),
-    fwd15: () =>
-      setState((prev) => {
-        const t = Math.min(prev.duration * 60, prev.t + 15);
-        const script = prev.liveScript ?? DEMO_SCRIPT;
-        const idx = Math.max(0, activeScriptIndex(script, t, prev.duration));
-        lastSpokenKeyRef.current = null;
-        return { ...prev, t, listenN: idx + 1 };
-      }),
+    seekTo: (seconds) => {
+      const prev = stateRef.current;
+      const script = prev.liveScript ?? DEMO_SCRIPT;
+      const clampedT = Math.max(0, Math.min(prev.duration * 60, seconds + 0.01));
+      const idx = Math.max(0, activeScriptIndex(script, clampedT, prev.duration));
+      seekIgnoreUntilRef.current = Date.now() + 400;
+      pendingSeekSecondsRef.current = null;
+      lastSpokenKeyRef.current = null;
+      lineClockAnchorRef.current = clampedT;
+      setState({
+        ...prev,
+        t: clampedT,
+        listenN: idx + 1,
+        openCite: null,
+      });
+    },
+    seekFraction: (fraction) => {
+      const prev = stateRef.current;
+      const clampedT = Math.max(
+        0,
+        Math.min(prev.duration * 60, fraction * prev.duration * 60),
+      );
+      const script = prev.liveScript ?? DEMO_SCRIPT;
+      const idx = Math.max(0, activeScriptIndex(script, clampedT, prev.duration));
+      seekIgnoreUntilRef.current = Date.now() + 400;
+      pendingSeekSecondsRef.current = null;
+      lastSpokenKeyRef.current = null;
+      lineClockAnchorRef.current = clampedT;
+      setState({
+        ...prev,
+        t: clampedT,
+        listenN: idx + 1,
+        openCite: null,
+      });
+    },
+    back15: () => {
+      if (skipLockRef.current) return;
+      skipLockRef.current = true;
+      window.setTimeout(() => {
+        skipLockRef.current = false;
+      }, 350);
+
+      const prev = stateRef.current;
+      const plan = planListenSkip(
+        prev,
+        -15,
+        turnAudio.current?.turnId ?? null,
+        turnAudio.getPlaybackPosition(),
+      );
+      seekIgnoreUntilRef.current = Date.now() + 400;
+      pendingSeekSecondsRef.current = plan.pendingSeekSeconds;
+      lineClockAnchorRef.current = plan.anchor;
+      if (plan.clearSpoken) lastSpokenKeyRef.current = null;
+      if (plan.seekSeconds != null) turnAudio.seekToSeconds(plan.seekSeconds);
+      setState({
+        ...prev,
+        t: plan.t,
+        listenN: plan.listenN,
+        openCite: null,
+      });
+    },
+    fwd15: () => {
+      if (skipLockRef.current) return;
+      skipLockRef.current = true;
+      window.setTimeout(() => {
+        skipLockRef.current = false;
+      }, 350);
+
+      const prev = stateRef.current;
+      const plan = planListenSkip(
+        prev,
+        15,
+        turnAudio.current?.turnId ?? null,
+        turnAudio.getPlaybackPosition(),
+      );
+      seekIgnoreUntilRef.current = Date.now() + 400;
+      pendingSeekSecondsRef.current = plan.pendingSeekSeconds;
+      lineClockAnchorRef.current = plan.anchor;
+      if (plan.clearSpoken) lastSpokenKeyRef.current = null;
+      if (plan.seekSeconds != null) turnAudio.seekToSeconds(plan.seekSeconds);
+      setState({
+        ...prev,
+        t: plan.t,
+        listenN: plan.listenN,
+        openCite: null,
+      });
+    },
     togglePlay: () =>
       setState((prev) => {
         const total = prev.duration * 60;
@@ -688,8 +952,19 @@ export function Experience() {
           return { ...prev, t: 0, listenN: 1, playing: true };
         }
         if (!prev.playing) {
-          // Resume must re-speak — exhausted clips ignore play().
-          lastSpokenKeyRef.current = null;
+          // Resume in place when the active clip is still loaded. Clearing
+          // lastSpokenKey forced speak() → playExclusive(), which rewound
+          // audio/clock after ±15 while paused.
+          const idx = prev.listenN - 1;
+          const activeKey =
+            prev.mode === "listen" && idx >= 0 ? `L${idx}` : null;
+          const canResumeInPlace =
+            activeKey != null &&
+            turnAudio.current?.turnId === activeKey &&
+            !turnAudio.isClipExhausted();
+          if (!canResumeInPlace) {
+            lastSpokenKeyRef.current = null;
+          }
         }
         return { ...prev, playing: !prev.playing };
       }),

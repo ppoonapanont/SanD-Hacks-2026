@@ -47,6 +47,14 @@ export interface InteractResponse {
   turns: ConversationTurn[];
   /** True when interrupt research fell back to mock news. */
   usedMockResearch?: boolean;
+  /** True when Mastra Moderator shaped the interrupt routing plan. */
+  moderatorUsed?: boolean;
+  /** Short moderator routing summary for UI notes. */
+  moderatorSummary?: string;
+  /** True when Mastra Guest agents produced interrupt replies. */
+  guestsUsed?: boolean;
+  /** Short guest-agent summary for UI notes. */
+  guestsSummary?: string;
   errors?: string[];
 }
 

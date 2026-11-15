@@ -155,15 +155,10 @@ export function useTurnAudio() {
   }, []);
 
   const setOnClipEnded = useCallback((cb: ((turnId: string) => void) | null) => {
-    if (!cb) {
-      audioQueue.setOnClipEnded(null);
-      return;
-    }
-    audioQueue.setOnClipEnded((turnId) => {
-      // Only the line we intentionally started may advance the transcript.
-      if (desiredTurnRef.current !== turnId) return;
-      cb(turnId);
-    });
+    // Always forward clip-end. Experience advance*PastTurn is a no-op when the
+    // turnId doesn't match the active line — the old desiredTurn guard could
+    // drop a real `ended` and freeze interrupt playback on "X is responding…".
+    audioQueue.setOnClipEnded(cb);
   }, [audioQueue]);
 
   const setOnTimeUpdate = useCallback(

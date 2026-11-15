@@ -81,9 +81,9 @@ When adding Mastra-driven prep/live `/next`, branch from or compare against **v1
 
 | Item | Status | Location / notes |
 |------|--------|------------------|
-| Mastra agents and workflows | PARTIAL | **v1+:** research/moderator + **Producer** (`producer-agent`) shapes `/generate` brief; host/guest/fact-check + live `/next` still post-v1 |
-| Moderator logic | COMPLETE | Gemini moderator plan (who answers + research need) in `interact.ts` |
-| Guest agent coordination | COMPLETE | Distinct guest reply turns from Gemini; targetGuestId supported |
+| Mastra agents and workflows | PARTIAL | **v1+:** research + **Producer** (`/generate` brief) + **Moderator** (`/interact` routing) + **Guest agents** (per-panelist interrupt replies); live `/next` still post-v1 |
+| Moderator logic | COMPLETE | Mastra Moderator plans who answers + research need in `moderatorPlan.ts` / `interact.ts` |
+| Guest agent coordination | COMPLETE | Mastra Guest agents (`createGuestAgent`) reply in character on interrupt; targetGuestId supported |
 | User question handling | COMPLETE | `/api/podcast/interact` + Experience `beginInterrupt` (demo fallback) |
 | Live research | COMPLETE | Optional Bright Data via `fetchNewsForConfig` on interrupt; mock fallback |
 | Conversation memory | PARTIAL | In-memory sessions + interrupt side-store; no Mastra memory / Neon |

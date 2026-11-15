@@ -5,7 +5,8 @@ import { handlePodcastInteraction } from "@/services/podcast/interact";
 import { resumePodcastEpisode } from "@/services/podcast/resume";
 
 /**
- * Run the full interruption pipeline (moderator → research → guest replies).
+ * Run the full interruption pipeline (Mastra moderator plan → research → guest replies).
+ * Used by Mastra workflows / Studio — not by the moderator agent itself (avoids recursion).
  */
 export const interactPodcastTool = createTool({
   id: "interact-podcast",
