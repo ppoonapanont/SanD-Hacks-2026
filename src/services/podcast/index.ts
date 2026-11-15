@@ -9,6 +9,8 @@ export { runProducerBrief } from "./producerBrief";
 export type { ProducerBrief, ProducerSegment } from "./producerBrief";
 export { runModeratorPlan } from "./moderatorPlan";
 export type { ModeratorPlan } from "./moderatorPlan";
+export { runGuestReplies } from "./guestReplies";
+export type { GuestRepliesResult } from "./guestReplies";
 export {
   buildPodcastConfig,
   mapDepthLabel,

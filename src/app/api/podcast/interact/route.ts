@@ -36,6 +36,8 @@ export async function POST(request: Request) {
       usedMockResearch: result.usedMockResearch,
       moderatorUsed: result.moderatorUsed,
       moderatorSummary: result.moderatorSummary,
+      guestsUsed: result.guestsUsed,
+      guestsSummary: result.guestsSummary,
       errors: result.errors,
     };
     return NextResponse.json(response);

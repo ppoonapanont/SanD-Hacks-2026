@@ -634,10 +634,15 @@ export function Experience() {
           result.moderatorUsed
             ? `Moderator: ${result.moderatorSummary ?? "routed panel"}`
             : null,
+          result.guestsUsed
+            ? result.guestsSummary ?? "Guest agents replied"
+            : null,
           result.usedMockResearch
             ? "Interrupt research used mock/fallback sources"
             : null,
-          !result.moderatorUsed && !result.usedMockResearch
+          !result.moderatorUsed &&
+          !result.guestsUsed &&
+          !result.usedMockResearch
             ? "Panel answering your question"
             : null,
         ].filter(Boolean);
