@@ -432,17 +432,20 @@ export function Experience() {
       turnAudio.current?.turnId === activeLineKey &&
       !turnAudio.isClipExhausted()
     ) {
-      // Some browsers drop currentTime seeks while paused — re-assert from the clock.
-      const pos = turnAudio.getPlaybackPosition();
-      const expected = stateRef.current.t - lineClockAnchorRef.current;
-      if (
-        pos.duration > 0 &&
-        Number.isFinite(expected) &&
-        expected >= 0 &&
-        Math.abs(pos.currentTime - expected) > 0.35
-      ) {
-        turnAudio.seekToSeconds(Math.min(pos.duration, expected));
-        seekIgnoreUntilRef.current = Date.now() + 200;
+      // Listen mode only: scrubber tracks clip time, so re-assert after pause seeks.
+      // Joined interrupt audio does not advance `t` — syncing would seek back to 0.
+      if (state.mode === "listen") {
+        const pos = turnAudio.getPlaybackPosition();
+        const expected = stateRef.current.t - lineClockAnchorRef.current;
+        if (
+          pos.duration > 0 &&
+          Number.isFinite(expected) &&
+          expected >= 0 &&
+          Math.abs(pos.currentTime - expected) > 0.35
+        ) {
+          turnAudio.seekToSeconds(Math.min(pos.duration, expected));
+          seekIgnoreUntilRef.current = Date.now() + 200;
+        }
       }
       turnAudio.play();
       return;
