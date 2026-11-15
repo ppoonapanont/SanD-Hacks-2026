@@ -647,83 +647,104 @@ export function Experience() {
     const customGuests = state.customGuests;
     nextFetchLockRef.current = true;
 
+    // Still relevant to retry? (user hasn't ended/switched sessions or paused).
+    const stillListening = () =>
+      stateRef.current.sessionId === sessionId &&
+      stateRef.current.mode === "listen" &&
+      stateRef.current.playing;
+
     void (async () => {
-      try {
-        const result = await nextTurn({ sessionId });
-        const line = adaptTurnToScriptLine(
-          result.turn,
-          guests,
-          sessionSourcesRef.current,
-        );
-        if (line) {
-          const idx = result.session.turns.length - 1;
-          const profile = profileForGuestSlot(guests, customGuests, line.s);
-          // Append text immediately so playback can advance; warm TTS in parallel.
-          const speakable = {
-            turnId: `L${idx}`,
-            text: line.x,
-            voiceId: profile.voiceId,
-            speakerId: `L${idx}`,
-            speakerName: profile.name,
-          };
-          void turnAudio.preload([speakable], { concurrency: 1 });
-          // Only start the new line if the current clip already finished. Never bump
-          // listenN while audio is still playing — that was cutting off the prior turn.
-          const currentFinished = turnAudio.isClipExhausted();
-          const waitingAtEnd =
-            currentFinished &&
-            stateRef.current.listenN >= (stateRef.current.liveScript?.length ?? 0);
-          if (waitingAtEnd) {
-            lastSpokenKeyRef.current = null;
-          }
-          if (result.errors?.length) {
-            console.warn("[Experience] live /next soft errors:", result.errors);
-          }
-          setState((prev) => {
-            if (prev.sessionId !== sessionId || prev.mode !== "listen") return prev;
-            const prevScript = prev.liveScript ?? [];
-            // Avoid duplicating if Strict Mode / overlap already appended.
-            if (prevScript.length >= result.session.turns.length) {
+      // A single failed call used to stall playback forever: nothing in this
+      // effect's dependencies changes after a failure, so it never re-ran on
+      // its own. Keep retrying with capped backoff for as long as the user is
+      // still listening, rather than giving up after a fixed attempt count.
+      for (let attempt = 1; stillListening(); attempt++) {
+        try {
+          const result = await nextTurn({ sessionId });
+          const line = adaptTurnToScriptLine(
+            result.turn,
+            guests,
+            sessionSourcesRef.current,
+          );
+          if (line) {
+            const idx = result.session.turns.length - 1;
+            const profile = profileForGuestSlot(guests, customGuests, line.s);
+            // Append text immediately so playback can advance; warm TTS in parallel.
+            const speakable = {
+              turnId: `L${idx}`,
+              text: line.x,
+              voiceId: profile.voiceId,
+              speakerId: `L${idx}`,
+              speakerName: profile.name,
+            };
+            void turnAudio.preload([speakable], { concurrency: 1 });
+            // Only start the new line if the current clip already finished. Never bump
+            // listenN while audio is still playing — that was cutting off the prior turn.
+            const currentFinished = turnAudio.isClipExhausted();
+            const waitingAtEnd =
+              currentFinished &&
+              stateRef.current.listenN >= (stateRef.current.liveScript?.length ?? 0);
+            if (waitingAtEnd) {
+              lastSpokenKeyRef.current = null;
+            }
+            if (result.errors?.length) {
+              console.warn("[Experience] live /next soft errors:", result.errors);
+            }
+            setState((prev) => {
+              if (prev.sessionId !== sessionId || prev.mode !== "listen") return prev;
+              const prevScript = prev.liveScript ?? [];
+              // Avoid duplicating if Strict Mode / overlap already appended.
+              if (prevScript.length >= result.session.turns.length) {
+                return {
+                  ...prev,
+                  liveComplete: Boolean(result.done),
+                };
+              }
+              const shouldStartNow =
+                currentFinished && prev.listenN >= prevScript.length;
+              // Provisional start = current scrubber (refined to exact start on speak).
+              // Do not use server estimate timestamps — they drift ahead of real audio.
+              const stamped = {
+                ...line,
+                t: Math.max(prev.t, speechElapsedRef.current),
+              };
+              const fallbackNote = result.errors?.length
+                ? `Live fallback: ${result.turn.speakerName} (model quota?)`
+                : result.generated
+                  ? `Live next: ${result.turn.speakerName}`
+                  : prev.note;
               return {
                 ...prev,
+                liveScript: [...prevScript, stamped],
+                listenN: shouldStartNow ? prev.listenN + 1 : prev.listenN,
+                note: fallbackNote,
+                noteK: 0,
                 liveComplete: Boolean(result.done),
               };
-            }
-            const shouldStartNow =
-              currentFinished && prev.listenN >= prevScript.length;
-            // Provisional start = current scrubber (refined to exact start on speak).
-            // Do not use server estimate timestamps — they drift ahead of real audio.
-            const stamped = {
-              ...line,
-              t: Math.max(prev.t, speechElapsedRef.current),
-            };
-            const fallbackNote = result.errors?.length
-              ? `Live fallback: ${result.turn.speakerName} (model quota?)`
-              : result.generated
-                ? `Live next: ${result.turn.speakerName}`
-                : prev.note;
-            return {
-              ...prev,
-              liveScript: [...prevScript, stamped],
-              listenN: shouldStartNow ? prev.listenN + 1 : prev.listenN,
-              note: fallbackNote,
-              noteK: 0,
-              liveComplete: Boolean(result.done),
-            };
-          });
-        } else if (result.done) {
-          setState((prev) => ({ ...prev, liveComplete: true }));
+            });
+          } else if (result.done) {
+            setState((prev) => ({ ...prev, liveComplete: true }));
+          }
+          break;
+        } catch (error) {
+          const message = error instanceof Error ? error.message : "";
+          if (message.toLowerCase().includes("complete")) {
+            setState((prev) => ({ ...prev, liveComplete: true }));
+            break;
+          }
+          console.warn(`[Experience] live /next failed (attempt ${attempt}):`, error);
+          if (attempt === 3) {
+            // Only speak up once this looks like more than a one-off blip.
+            setState((prev) =>
+              prev.sessionId === sessionId
+                ? { ...prev, note: "Having trouble continuing the episode — still trying…", noteK: 0 }
+                : prev,
+            );
+          }
+          await new Promise((resolve) => setTimeout(resolve, Math.min(1500 * attempt, 8000)));
         }
-      } catch (error) {
-        const message = error instanceof Error ? error.message : "";
-        if (message.toLowerCase().includes("complete")) {
-          setState((prev) => ({ ...prev, liveComplete: true }));
-        } else {
-          console.warn("[Experience] live /next failed:", error);
-        }
-      } finally {
-        nextFetchLockRef.current = false;
       }
+      nextFetchLockRef.current = false;
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
