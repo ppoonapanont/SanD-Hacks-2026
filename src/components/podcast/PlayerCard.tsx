@@ -745,7 +745,18 @@ function TranscriptLine({
               <path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1" />
             </svg>
             <div style={{ display: "flex", flexDirection: "column", gap: 4, minWidth: 0 }}>
-              <span style={{ fontSize: 15, fontWeight: 600 }}>{line.openSource.title}</span>
+              {line.openSource.url ? (
+                <a
+                  href={line.openSource.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{ fontSize: 15, fontWeight: 600, color: "inherit", textDecoration: "underline" }}
+                >
+                  {line.openSource.title}
+                </a>
+              ) : (
+                <span style={{ fontSize: 15, fontWeight: 600 }}>{line.openSource.title}</span>
+              )}
               <span style={{ fontSize: 13, color: theme.sub }}>
                 {line.openSource.outlet} · {line.openSource.date}
               </span>

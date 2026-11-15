@@ -22,60 +22,69 @@ export function SourcesPanel({ view }: SourcesPanelProps) {
       <h3 style={{ margin: "0 0 4px", fontSize: 13, fontWeight: 600, letterSpacing: "0.1em", textTransform: "uppercase", color: "#97acc8" }}>
         Sources · {view.sourceCount}
       </h3>
-      {view.sourceList.map((s) => (
-        <div
-          key={s.n}
-          style={{
-            display: "flex",
-            gap: 12,
-            padding: 12,
-            borderRadius: 14,
-            border: `1px solid ${s.border}`,
-            background: s.background,
-          }}
-        >
-          <span
+      {view.sourceList.map((s) => {
+        const Wrapper = s.url ? "a" : "div";
+        return (
+          <Wrapper
+            key={s.n}
+            {...(s.url ? { href: s.url, target: "_blank", rel: "noopener noreferrer" } : {})}
             style={{
-              width: 26,
-              height: 26,
-              flex: "none",
-              borderRadius: 8,
-              background: "rgba(151,172,200,0.16)",
-              color: "#97acc8",
-              fontSize: 12,
-              fontWeight: 600,
               display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
+              gap: 12,
+              padding: 12,
+              borderRadius: 14,
+              border: `1px solid ${s.border}`,
+              background: s.background,
+              textDecoration: "none",
+              color: "inherit",
+              cursor: s.url ? "pointer" : "default",
             }}
           >
-            {s.n}
-          </span>
-          <div style={{ display: "flex", flexDirection: "column", gap: 4, minWidth: 0 }}>
-            <span style={{ fontSize: 14, fontWeight: 500, lineHeight: 1.35 }}>{s.title}</span>
-            <span style={{ fontSize: 12, color: "#b6bfc1" }}>
-              {s.outlet} · {s.date}
+            <span
+              style={{
+                width: 26,
+                height: 26,
+                flex: "none",
+                borderRadius: 8,
+                background: "rgba(151,172,200,0.16)",
+                color: "#97acc8",
+                fontSize: 12,
+                fontWeight: 600,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              {s.n}
             </span>
-            {s.isLive && (
-              <span
-                style={{
-                  alignSelf: "flex-start",
-                  fontSize: 11,
-                  fontWeight: 600,
-                  letterSpacing: "0.06em",
-                  textTransform: "uppercase",
-                  padding: "3px 8px",
-                  borderRadius: 6,
-                  background: "#e7ebee",
-                  color: "#051230",
-                }}
-              >
-                New
+            <div style={{ display: "flex", flexDirection: "column", gap: 4, minWidth: 0 }}>
+              <span style={{ fontSize: 14, fontWeight: 500, lineHeight: 1.35, textDecoration: s.url ? "underline" : "none" }}>
+                {s.title}
               </span>
-            )}
-          </div>
-        </div>
-      ))}
+              <span style={{ fontSize: 12, color: "#b6bfc1" }}>
+                {s.outlet} · {s.date}
+              </span>
+              {s.isLive && (
+                <span
+                  style={{
+                    alignSelf: "flex-start",
+                    fontSize: 11,
+                    fontWeight: 600,
+                    letterSpacing: "0.06em",
+                    textTransform: "uppercase",
+                    padding: "3px 8px",
+                    borderRadius: 6,
+                    background: "#e7ebee",
+                    color: "#051230",
+                  }}
+                >
+                  New
+                </span>
+              )}
+            </div>
+          </Wrapper>
+        );
+      })}
     </section>
   );
 }
