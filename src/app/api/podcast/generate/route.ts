@@ -4,6 +4,11 @@ import { validatePodcastConfig } from "@/lib/validation/podcast";
 import { generatePodcastEpisode } from "@/services/podcast";
 import type { GeneratePodcastRequest, GeneratePodcastResponse } from "@/types";
 
+// Research + producer brief + script generation run sequentially and can
+// exceed Vercel's default 10s (Hobby) function timeout; 60s is the Hobby-plan
+// ceiling. Deep/long episodes may still need Vercel Pro (up to 300s) to be fully safe.
+export const maxDuration = 60;
+
 /**
  * POST /api/podcast/generate
  * Developer 1 — News Engine + Gemini episode script generation.

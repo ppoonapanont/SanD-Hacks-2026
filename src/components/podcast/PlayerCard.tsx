@@ -71,6 +71,9 @@ export function PlayerCard({ view, handlers }: PlayerCardProps) {
                 </li>
               ))}
             </ul>
+            <p style={{ margin: 0, fontSize: 14, color: "#b6bfc1", textAlign: "center", maxWidth: 360 }}>
+              Deeper or longer episodes can take up to 5 minutes — hang tight.
+            </p>
           </div>
         </>
       )}

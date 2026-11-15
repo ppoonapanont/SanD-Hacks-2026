@@ -3,6 +3,10 @@ import { NextResponse } from "next/server";
 import { handlePodcastInteraction } from "@/services/podcast/interact";
 import type { InteractRequest, InteractResponse } from "@/types";
 
+// Moderator plan + guest agent replies run sequentially and can exceed
+// Vercel's default 10s (Hobby) function timeout.
+export const maxDuration = 60;
+
 /**
  * POST /api/podcast/interact
  * Developer 1 — user interruption + research + guest responses (P1).

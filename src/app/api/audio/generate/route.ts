@@ -3,6 +3,10 @@ import { NextResponse } from "next/server";
 import { ElevenLabsError, isElevenLabsConfigured, textToSpeech } from "@/services/elevenlabs";
 import type { ApiErrorResponse, GenerateAudioRequest, GenerateAudioResponse } from "@/types";
 
+// Cheap insurance against occasional ElevenLabs latency spikes beyond
+// Vercel's default 10s (Hobby) function timeout.
+export const maxDuration = 30;
+
 /**
  * POST /api/audio/generate
  * Developer 2 — ElevenLabs text-to-speech for a single conversation turn.

@@ -4,6 +4,11 @@ import { getSession, updateSession } from "@/lib/sessions";
 import { advancePodcastTurn } from "@/services/podcast/nextTurn";
 import type { NextTurnRequest, NextTurnResponse } from "@/types";
 
+// Line generation budgets up to ~12s internally (LINE_TIMEOUT_MS); Vercel's
+// default function timeout (10s on Hobby) would kill the request before that
+// timeout ever fires, hanging the client with no response at all.
+export const maxDuration = 60;
+
 /** In-memory turn cursor per session for precomputed (script) /next advancement. */
 const nextTurnCursors = new Map<string, number>();
 
