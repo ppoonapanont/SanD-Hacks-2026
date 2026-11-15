@@ -84,8 +84,8 @@ export const DEMO_GUESTS: Record<GuestKey, DemoGuestProfile> = {
     radius: "50% 50% 50% 12px",
     initials: "MH",
     avatarKey: "economist",
-    /** ElevenLabs stock voice "Sarah" (Mature, Reassuring, Confident — female, American). */
-    voiceId: "EXAVITQu4vr4xnSDxMaL",
+    /** ElevenLabs stock voice "Bill" (Wise, Mature, Balanced — male, American). */
+    voiceId: "pqHfZKP75CvOlQylNhV4",
   },
   historian: {
     id: "historian",
@@ -97,8 +97,8 @@ export const DEMO_GUESTS: Record<GuestKey, DemoGuestProfile> = {
     radius: "12px 50% 12px 50%",
     initials: "LO",
     avatarKey: "historian",
-    /** ElevenLabs stock voice "George" (Warm, Captivating Storyteller — male, British). */
-    voiceId: "JBFqnCBsd6RMkjVDRZzb",
+    /** ElevenLabs stock voice "Sarah" (Mature, Reassuring, Confident — female, American). */
+    voiceId: "EXAVITQu4vr4xnSDxMaL",
   },
   politician: {
     id: "politician",
@@ -123,8 +123,8 @@ export const DEMO_GUESTS: Record<GuestKey, DemoGuestProfile> = {
     radius: "18px 18px 6px 18px",
     initials: "PS",
     avatarKey: "diplomat",
-    /** ElevenLabs stock voice "Brian" (Deep, Resonant, Comforting — male, American). */
-    voiceId: "nPczCjzIPdrG82nA3q9T",
+    /** ElevenLabs stock voice "Bella" (Professional, Bright, Warm — female, American). */
+    voiceId: "hpp4J3VqNfWAUOO0d1Us",
   },
 };
 
