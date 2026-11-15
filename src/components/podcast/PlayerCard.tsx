@@ -1,3 +1,5 @@
+import { useEffect, useRef } from "react";
+
 import { GuestAvatar } from "@/components/guests/GuestAvatar";
 
 import type { ExperienceView, TranscriptLineView } from "./deriveExperienceView";
@@ -10,6 +12,18 @@ export interface PlayerCardProps {
 
 /** The primary product surface: empty state, generating state, or the live episode player. */
 export function PlayerCard({ view, handlers }: PlayerCardProps) {
+  const transcriptRef = useRef<HTMLDivElement | null>(null);
+  const lastLineKey = view.lines[view.lines.length - 1]?.key ?? null;
+
+  // Auto-scroll to the newest content — but only when something actually new
+  // arrived (new line, new join reply, a mode change), not on every tick,
+  // so it doesn't fight a user who scrolled up to reread earlier lines.
+  useEffect(() => {
+    const el = transcriptRef.current;
+    if (!el) return;
+    el.scrollTop = el.scrollHeight;
+  }, [lastLineKey, view.joinLines.length, view.isResearch, view.showQuestion, view.hasNote]);
+
   return (
     <section
       aria-label="Player"
@@ -45,9 +59,9 @@ export function PlayerCard({ view, handlers }: PlayerCardProps) {
       {view.isGenerating && (
         <>
           <div className="scan" aria-hidden="true" />
-          <div style={{ minHeight: 420, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 26 }}>
+          <div style={{ width: "100%", minHeight: 420, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 26 }}>
             <h2 style={{ margin: 0, fontFamily: "'Space Grotesk', sans-serif", fontSize: 26, fontWeight: 600 }}>Generating…</h2>
-            <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "flex", flexDirection: "column", gap: 14, minWidth: 300 }}>
+            <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "flex", flexDirection: "column", gap: 14 }}>
               {view.generatingSteps.map((st) => (
                 <li key={st.label} style={{ display: "flex", alignItems: "center", gap: 12, fontSize: 16, color: st.color }}>
                   <StepIcon step={st} />
@@ -273,12 +287,14 @@ export function PlayerCard({ view, handlers }: PlayerCardProps) {
             </span>
           </div>
 
-          <div style={{ borderTop: `1px solid ${view.theme.line}`, paddingTop: 22, display: "flex", flexDirection: "column", gap: 18, minHeight: 340 }}>
+          {/* Fixed-height slot: the note pill mounts/unmounts inside it without
+              ever changing this wrapper's height, so the transcript below never
+              jumps when a status note appears or clears. */}
+          <div style={{ minHeight: 38, display: "flex", alignItems: "center" }}>
             {view.hasNote && (
               <div
                 role="status"
                 style={{
-                  alignSelf: "flex-start",
                   display: "flex",
                   alignItems: "center",
                   gap: 10,
@@ -288,15 +304,33 @@ export function PlayerCard({ view, handlers }: PlayerCardProps) {
                   color: "#97acc8",
                   fontSize: 14,
                   fontWeight: 500,
+                  maxWidth: "100%",
+                  overflow: "hidden",
                 }}
               >
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#97acc8" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#97acc8" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ flex: "none" }}>
                   <path d="m5 12.5 4.5 4.5L19 7.5" />
                 </svg>
-                {view.note}
+                <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{view.note}</span>
               </div>
             )}
+          </div>
 
+          <div
+            ref={transcriptRef}
+            style={{
+              borderTop: `1px solid ${view.theme.line}`,
+              paddingTop: 22,
+              paddingRight: 6,
+              display: "flex",
+              flexDirection: "column",
+              gap: 18,
+              height: 380,
+              minHeight: 0,
+              flex: "0 0 auto",
+              overflowY: "scroll",
+            }}
+          >
             {view.showLines && (
               <div aria-live="polite" style={{ display: "flex", flexDirection: "column", gap: 18 }}>
                 {view.lines.map((l) => (
