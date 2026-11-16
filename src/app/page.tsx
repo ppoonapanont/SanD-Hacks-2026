@@ -305,7 +305,56 @@ export default function HomePage() {
       </section>
 
       <footer style={{ borderTop: "1px solid rgba(182,191,193,0.14)" }}>
-        <div style={{ maxWidth: 1240, margin: "0 auto", padding: "28px 32px", fontSize: 14, color: "#b6bfc1" }}>© 2026 RondoFM</div>
+        <div style={{ maxWidth: 1240, margin: "0 auto", padding: "48px 32px 28px" }}>
+          <h3
+            style={{
+              margin: "0 0 20px",
+              fontFamily: "'Space Grotesk', sans-serif",
+              fontSize: 15,
+              fontWeight: 600,
+              letterSpacing: "0.08em",
+              textTransform: "uppercase",
+              color: "#97acc8",
+            }}
+          >
+            About us
+          </h3>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 32, marginBottom: 36 }}>
+            <a
+              href="https://www.linkedin.com/in/pun-pax-poonapanont/"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="ghost-link"
+              style={{ display: "flex", flexDirection: "column", gap: 4, textDecoration: "none", color: "#eef1f3" }}
+            >
+              <span style={{ fontSize: 17, fontWeight: 600 }}>Pun &quot;Pax&quot; Poonapanont</span>
+              <span style={{ fontSize: 14, color: "#b6bfc1" }}>Frontend &amp; Audio</span>
+              <span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 13, color: "#97acc8", marginTop: 2 }}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                  <path d="M20.45 20.45h-3.56v-5.57c0-1.33-.02-3.03-1.85-3.03-1.85 0-2.14 1.44-2.14 2.94v5.66H9.34V9h3.42v1.56h.05c.48-.9 1.64-1.85 3.38-1.85 3.6 0 4.27 2.37 4.27 5.46v6.28zM5.34 7.43a2.07 2.07 0 1 1 0-4.14 2.07 2.07 0 0 1 0 4.14zM7.12 20.45H3.56V9h3.56v11.45z" />
+                </svg>
+                LinkedIn
+              </span>
+            </a>
+            <a
+              href="https://www.linkedin.com/in/-andyly/"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="ghost-link"
+              style={{ display: "flex", flexDirection: "column", gap: 4, textDecoration: "none", color: "#eef1f3" }}
+            >
+              <span style={{ fontSize: 17, fontWeight: 600 }}>Andy Ly</span>
+              <span style={{ fontSize: 14, color: "#b6bfc1" }}>AI &amp; Backend</span>
+              <span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 13, color: "#97acc8", marginTop: 2 }}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                  <path d="M20.45 20.45h-3.56v-5.57c0-1.33-.02-3.03-1.85-3.03-1.85 0-2.14 1.44-2.14 2.94v5.66H9.34V9h3.42v1.56h.05c.48-.9 1.64-1.85 3.38-1.85 3.6 0 4.27 2.37 4.27 5.46v6.28zM5.34 7.43a2.07 2.07 0 1 1 0-4.14 2.07 2.07 0 0 1 0 4.14zM7.12 20.45H3.56V9h3.56v11.45z" />
+                </svg>
+                LinkedIn
+              </span>
+            </a>
+          </div>
+          <div style={{ fontSize: 14, color: "#b6bfc1" }}>© 2026 RondoFM</div>
+        </div>
       </footer>
     </div>
   );
